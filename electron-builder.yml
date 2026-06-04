@@ -1,0 +1,23 @@
+appId: com.mdtest.app
+productName: mdtest
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources/platform-tools
+    to: platform-tools
+    filter:
+      - "**/*"
+  - from: resources/hdc-toolchains
+    to: hdc-toolchains
+    filter:
+      - "**/*"
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

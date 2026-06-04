@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+.vite/
+.env
+.env.*
+
+# 内置工具链（体积大，不提交仓库）
+resources/platform-tools/*
+!resources/platform-tools/.gitkeep
+resources/.tmp-platform-tools/
+resources/hdc-toolchains/*
+!resources/hdc-toolchains/.gitkeep

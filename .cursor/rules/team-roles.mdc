@@ -1,0 +1,36 @@
+---
+description: 主代理 / Superpowers / 柚爱 分工与协作顺序（alwaysApply）
+alwaysApply: true
+---
+
+# 团队分工（mdtest）
+
+## 角色
+
+| 角色 | 负责 | 不负责 |
+|------|------|--------|
+| **主代理** | 需求澄清、IPC/主进程、设备与游戏逻辑、计划与验证、协调子代理 | 独自大改 UI 而不读柚爱规范 |
+| **Superpowers** | 开发流程技能链（见 `superpowers-workflow.mdc`） | UI 审美细则 |
+| **柚爱 pomelosuki** | shadcn-svelte + Tailwind UI/UX、设计 token、主题色与风格切换、界面评审 | adb/hdc、扫描、文件协议 |
+
+## 执行顺序（功能 + UI）
+
+1. **brainstorming** — 含 UI 时由柚爱方向定 Tone（Dark & Premium 工具风）与用户确认。
+2. **writing-plans** — 计划写入 `docs/superpowers/plans/`，区分「逻辑任务」与「UI 任务」。
+3. **实现**
+   - 逻辑 / 主进程 / preload → 主代理
+   - 渲染层 `.svelte` UI → 读 `pomelosuki` SKILL（通用方法）+ `docs/pomelosuki/project-profile.md`（项目约束），或委派 **pomelosuki** 子代理
+4. **Svelte MCP** — 改 `.svelte` 后 `svelte-autofixer`（若可用）
+5. **verification-before-completion** — `pnpm run build`（+ `pnpm check`）；UI 大改建议 `pnpm dev` + 浏览器目视
+
+## 技术约定（全员遵守）
+
+- **样式**：Tailwind CSS 4（`@import "tailwindcss"`），禁止新增大块自定义 `<style>`，禁止 **emoji 作图标**
+- **图标**：`lucide-svelte`，统一 `size-4` / `size-5`
+- **栈**：Electron + Svelte 5 + electron-vite
+
+## 委派话术
+
+- 用户说「按流程做」→ 严格 Superpowers，不跳步
+- 用户说「改版 UI / 好看一点」→ 启用柚爱规范并优先 Tailwind 实现
+- 用户说「用柚爱」→ 使用 `pomelosuki` 子代理或读取其 SKILL
