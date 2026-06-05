@@ -2,17 +2,17 @@ import { existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { resourcesSubdir } from './resources-path'
+import { deviceToolchainDir } from './resources-path'
 
 const execFileAsync = promisify(execFile)
 
-const ADB_PATH = join(resourcesSubdir('platform-tools'), 'adb.exe')
+const ADB_PATH = join(deviceToolchainDir('android'), 'adb.exe')
 
 let cachedReady: boolean | undefined
 
 export function resolveAdbPath(): string {
   if (!existsSync(ADB_PATH)) {
-    throw new Error(`未找到内置 adb: ${ADB_PATH}，请运行 pnpm run setup:platform-tools`)
+    throw new Error(`未找到内置 adb: ${ADB_PATH}，请将 platform-tools 放入 resources/device-toolchains/android/`)
   }
   return ADB_PATH
 }

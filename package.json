@@ -11,10 +11,7 @@
     "preview": "electron-vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "dist": "electron-vite build && electron-builder",
-    "setup:platform-tools": "node scripts/download-platform-tools.mjs",
-    "setup:hdc": "node scripts/setup-hdc-toolchains.mjs",
-    "setup:libimobiledevice": "node scripts/setup-libimobiledevice.mjs",
-    "postinstall": "node scripts/download-platform-tools.mjs && node scripts/fix-electron-install.cjs"
+    "postinstall": "node scripts/fix-electron-install.cjs"
   },
   "devDependencies": {
     "@internationalized/date": "^3.12.2",

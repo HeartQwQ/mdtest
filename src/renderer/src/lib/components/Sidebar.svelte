@@ -2,7 +2,7 @@
 
   import { onMount } from 'svelte'
 
-  import { Cpu, Monitor, Smartphone, Tablet } from '@lucide/svelte'
+  import { Monitor, Smartphone } from '@lucide/svelte'
 
   import { cn } from '$lib/utils'
 
@@ -25,15 +25,10 @@
     icon: typeof Smartphone
 
   }[] = [
-
+    { id: 'windows', label: 'PC', icon: Monitor },
     { id: 'android', label: '安卓', icon: Smartphone },
-
-    { id: 'windows', label: 'PC 游戏', icon: Monitor },
-
-    { id: 'ios', label: 'iOS', icon: Tablet },
-
-    { id: 'harmony', label: '鸿蒙', icon: Cpu }
-
+    { id: 'ios', label: 'iOS', icon: Smartphone },
+    { id: 'harmony', label: '鸿蒙', icon: Smartphone }
   ]
 
 

@@ -55,15 +55,11 @@ function parseListTargets(stdout: string): DeviceInfo[] {
     devices.push({
       id,
       platform: 'harmony',
-      name: isUartCom
-        ? `${id}（串口通道，非 USB 手机）`
-        : details.extra
-          ? `${id} (${details.extra})`
-          : id,
+      name: details.extra ? `${id} (${details.extra})` : id,
       status: mapStatus(statusRaw),
       details: {
         ...details,
-        ...(isUartCom ? { note: 'HDC 扫描到的 UART/COM 端口，多为板载或蓝牙虚拟串口' } : {})
+        ...(isUartCom ? { uartChannel: 'true' } : {})
       }
     })
   }
@@ -71,7 +67,7 @@ function parseListTargets(stdout: string): DeviceInfo[] {
   return devices
 }
 
-/** 是否为用户通常关心的真机/模拟器（USB、TCP），排除 UART/COM 串口条目。 */
+/** 是否为用户关心的真机/模拟器（USB、TCP），排除 UART/COM 串口通道。 */
 export function isHarmonyHandset(device: DeviceInfo): boolean {
   const t = device.details?.transport?.toLowerCase()
   if (t === 'uart') return false
@@ -80,10 +76,7 @@ export function isHarmonyHandset(device: DeviceInfo): boolean {
 }
 
 function filterHandsets(devices: DeviceInfo[]): DeviceInfo[] {
-  const handsets = devices.filter(isHarmonyHandset)
-  // 有真机时隐藏 COM 串口噪音；只有 COM 时仍显示并标注，避免列表空白却让用户困惑
-  if (handsets.length > 0) return handsets
-  return devices
+  return devices.filter(isHarmonyHandset)
 }
 
 /**
@@ -97,13 +90,17 @@ export const harmonyAdapter: DeviceAdapter = {
   },
 
   async listDevices(): Promise<DeviceInfo[]> {
-    let out = await runHdc(['list', 'targets'])
+    const out = await runHdc(['list', 'targets'])
     let devices = parseListTargets(out)
 
-    if (devices.length === 0) {
+    const noUsbTargets =
+      out.includes('[Empty]') || /\bno targets\b/i.test(out)
+
+    // 无 USB/TCP 目标时 -v 往往只列出本机 UART/COM，跳过以免误报为「已连接设备」
+    if (devices.length === 0 && !noUsbTargets) {
       try {
-        out = await runHdc(['list', 'targets', '-v'])
-        devices = parseListTargets(out)
+        const verbose = await runHdc(['list', 'targets', '-v'])
+        devices = parseListTargets(verbose)
       } catch {
         /* 部分版本不支持 -v */
       }

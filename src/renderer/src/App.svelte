@@ -1,17 +1,27 @@
 <script lang="ts">
   import { ModeWatcher } from 'mode-watcher'
-  import Sidebar from './lib/components/Sidebar.svelte'
-  import DeviceView from './lib/components/DeviceView.svelte'
-  import type { DevicePlatform } from './lib/ipc'
-
-  let active = $state<DevicePlatform>('android')
+  import AppSidebar from '$lib/components/nav/AppSidebar.svelte'
+  import Titlebar from '$lib/components/Titlebar.svelte'
+  import HomeView from '$lib/views/HomeView.svelte'
+  import DeviceManagementView from '$lib/views/DeviceManagementView.svelte'
+  import SettingsView from '$lib/views/SettingsView.svelte'
+  import { view } from '$lib/stores/view.svelte'
 </script>
 
 <ModeWatcher />
 
-<div class="flex h-screen bg-background">
-  <Sidebar bind:active />
-  <main class="min-w-0 flex-1 overflow-auto">
-    <DeviceView platform={active} />
-  </main>
+<div class="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+  <Titlebar />
+  <div class="flex min-h-0 flex-1">
+    <AppSidebar />
+    <main class="min-w-0 flex-1 overflow-hidden">
+      {#if view.current === 'home'}
+        <HomeView />
+      {:else if view.current === 'devices'}
+        <DeviceManagementView />
+      {:else if view.current === 'settings'}
+        <SettingsView />
+      {/if}
+    </main>
+  </div>
 </div>

@@ -1,20 +1,40 @@
-# 内置工具目录
+# 内置设备工具链
 
-路径固定，应用只认以下位置：
+三端 CLI 统一放在 `device-toolchains/`，随仓库提交，克隆即可使用，无需额外下载脚本。
 
 ```
 resources/
-├── platform-tools/
-│   └── adb.exe          # 及同目录 dll 等
-├── hdc-toolchains/
-│   └── toolchains/
-│       └── hdc.exe      # 及同目录 lib、modulecheck 等
-└── libimobiledevice/
-    ├── idevice_id.exe
-    ├── ideviceinfo.exe
-    └── …                # 同目录 dll 等
+└── device-toolchains/
+    ├── android/          # Google platform-tools（adb 等）
+    │   └── adb.exe
+    ├── harmony/          # DevEco hdc toolchains
+    │   └── hdc.exe
+    └── ios/              # libimobiledevice Windows 套件
+        ├── idevice_id.exe
+        ├── ideviceinfo.exe
+        └── …
 ```
 
-- 安卓：`pnpm run setup:platform-tools` 下载到 `platform-tools/`
-- 鸿蒙：从 DevEco 复制 `toolchains` 到 `hdc-toolchains/toolchains/`，或 `pnpm run setup:hdc`
-- iOS：`pnpm run setup:libimobiledevice` 下载到 `libimobiledevice/`（Windows 另需 Apple Mobile Device Support）
+## 路径约定
+
+| 平台 | 目录 | 主程序 |
+|------|------|--------|
+| 安卓 | `device-toolchains/android/` | `adb.exe` |
+| 鸿蒙 | `device-toolchains/harmony/` | `hdc.exe` |
+| iOS | `device-toolchains/ios/` | `idevice_id.exe` |
+
+代码通过 `deviceToolchainDir('android' | 'harmony' | 'ios')` 解析路径（见 `src/main/devices/resources-path.ts`）。
+
+## 来源与许可
+
+| 工具 | 来源 | 许可 |
+|------|------|------|
+| adb | [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools) | Apache 2.0 |
+| hdc | Huawei DevEco Studio SDK toolchains | 见目录内 `NOTICE.txt` |
+| libimobiledevice | [libimobiledevice-windows](https://github.com/jrjr/libimobiledevice-windows) | 见各发行包说明 |
+
+iOS 设备接入另需本机安装 **Apple Mobile Device Support**（iTunes 组件），与工具链二进制无关。
+
+## 更新工具链
+
+直接替换对应子目录内的文件并提交即可。鸿蒙工具链可从 DevEco 安装目录复制 `toolchains/` 内容到 `harmony/`。

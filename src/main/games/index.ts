@@ -25,5 +25,6 @@ export {
   listPcGameInstances,
   scanAndCachePcGames,
   ensurePcGamesLoaded,
-  getCachedPcGames
+  getCachedPcGames,
+  removePcGameInstance
 } from './pc-workspace'

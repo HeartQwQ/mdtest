@@ -2,6 +2,8 @@
 
 本仓库开发遵循 [Superpowers](https://github.com/obra/superpowers) 技能链。
 
+**产品需求总览**：[`docs/requirements.md`](../requirements.md)
+
 ## 计划文档
 
 实现计划放在：

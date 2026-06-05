@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 
 const api = {
+  windowMinimize: () => ipcRenderer.invoke('window:minimize'),
+  windowToggleMaximize: (): Promise<boolean> => ipcRenderer.invoke('window:toggleMaximize'),
+  windowClose: () => ipcRenderer.invoke('window:close'),
+  windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
+
   listDevices: (platform: string) => ipcRenderer.invoke('devices:list', platform),
   platformAvailability: () => ipcRenderer.invoke('devices:availability'),
   adbPath: () => ipcRenderer.invoke('devices:adbPath'),
@@ -12,6 +17,8 @@ const api = {
 
   startDeviceWatch: (platform: string) => ipcRenderer.invoke('devices:startWatch', platform),
   stopDeviceWatch: (platform: string) => ipcRenderer.invoke('devices:stopWatch', platform),
+  removeDevice: (platform: string, deviceId: string) =>
+    ipcRenderer.invoke('devices:remove', platform, deviceId) as Promise<boolean>,
   onDevicesChanged: (callback: (payload: unknown) => void) => {
     const listener = (_event: IpcRendererEvent, payload: unknown): void => callback(payload)
     ipcRenderer.on('devices:changed', listener)

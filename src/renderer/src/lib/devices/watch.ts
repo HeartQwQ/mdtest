@@ -1,20 +1,19 @@
-import { ipc, type DeviceInfo } from '../ipc'
+import { ipc, type DeviceInfo, type DevicePlatform } from '../ipc'
 
-export type MobileDevicePlatform = 'android' | 'harmony' | 'ios'
+export type WatchablePlatform = DevicePlatform
 
-export interface MobileDeviceWatchOptions {
-  onDevices: (devices: DeviceInfo[], changed: boolean) => void
+export interface DeviceWatchOptions {
+  onDevices: (devices: DeviceInfo[]) => void
   onError?: (message: string | null) => void
   onLoading?: (loading: boolean) => void
 }
 
 /**
- * 订阅主进程的设备变化事件，渲染层不再轮询。
- * 组件卸载时调用返回的 stop 取消订阅并通知主进程停止监测。
+ * 订阅主进程设备变化（四端），渲染层不轮询。
  */
-export function watchMobileDevices(
-  platform: MobileDevicePlatform,
-  options: MobileDeviceWatchOptions
+export function watchDevices(
+  platform: WatchablePlatform,
+  options: DeviceWatchOptions
 ): () => void {
   let disposed = false
   let firstArrived = false
@@ -28,7 +27,7 @@ export function watchMobileDevices(
       options.onLoading?.(false)
     }
     options.onError?.(null)
-    options.onDevices(payload.devices, true)
+    options.onDevices(payload.devices)
   })
 
   void ipc.startDeviceWatch(platform)
@@ -40,11 +39,45 @@ export function watchMobileDevices(
   }
 }
 
-/** 轮询更新后保持选中项；设备离线则返回 null。 */
+/** 同时订阅四端，返回统一 cleanup。 */
+export function watchAllPlatforms(
+  onUpdate: (platform: DevicePlatform, devices: DeviceInfo[]) => void,
+  onLoading?: (platform: DevicePlatform, loading: boolean) => void
+): () => void {
+  const platforms: DevicePlatform[] = ['windows', 'android', 'ios', 'harmony']
+  const stops = platforms.map((platform) =>
+    watchDevices(platform, {
+      onLoading: (v) => onLoading?.(platform, v),
+      onDevices: (devices) => onUpdate(platform, devices)
+    })
+  )
+  return () => stops.forEach((s) => s())
+}
+
 export function reconcileSelectedDevice(
   selected: DeviceInfo | null,
   devices: DeviceInfo[]
 ): DeviceInfo | null {
   if (!selected) return null
   return devices.find((d) => d.id === selected.id) ?? null
+}
+
+/** @deprecated 使用 watchDevices；保留给旧面板。 */
+export type MobileDevicePlatform = Exclude<DevicePlatform, 'windows'>
+
+export interface MobileDeviceWatchOptions {
+  onDevices: (devices: DeviceInfo[], changed: boolean) => void
+  onError?: (message: string | null) => void
+  onLoading?: (loading: boolean) => void
+}
+
+export function watchMobileDevices(
+  platform: MobileDevicePlatform,
+  options: MobileDeviceWatchOptions
+): () => void {
+  return watchDevices(platform, {
+    onLoading: options.onLoading,
+    onError: options.onError,
+    onDevices: (devices) => options.onDevices(devices, true)
+  })
 }

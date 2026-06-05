@@ -239,3 +239,11 @@
     @apply cursor-not-allowed opacity-50;
   }
 }
+
+@utility drag-region {
+  -webkit-app-region: drag;
+}
+
+@utility no-drag {
+  -webkit-app-region: no-drag;
+}

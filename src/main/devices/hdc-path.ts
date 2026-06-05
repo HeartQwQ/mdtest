@@ -2,17 +2,17 @@ import { existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { resourcesSubdir } from './resources-path'
+import { deviceToolchainDir } from './resources-path'
 
 const execFileAsync = promisify(execFile)
 
-const HDC_PATH = join(resourcesSubdir('hdc-toolchains'), 'toolchains', 'hdc.exe')
+const HDC_PATH = join(deviceToolchainDir('harmony'), 'hdc.exe')
 
 let cachedReady: boolean | undefined
 
 export function resolveHdcPath(): string {
   if (!existsSync(HDC_PATH)) {
-    throw new Error(`未找到内置 hdc: ${HDC_PATH}，请将 DevEco toolchains 放到该目录`)
+    throw new Error(`未找到内置 hdc: ${HDC_PATH}，请将 DevEco toolchains 放入 resources/device-toolchains/harmony/`)
   }
   return HDC_PATH
 }

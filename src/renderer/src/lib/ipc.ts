@@ -35,6 +35,9 @@ export const ipc = {
   stopDeviceWatch: (platform: DevicePlatform): Promise<void> =>
     window.api.stopDeviceWatch(platform) as Promise<void>,
 
+  removeDevice: (platform: DevicePlatform, deviceId: string): Promise<boolean> =>
+    window.api.removeDevice(platform, deviceId) as Promise<boolean>,
+
   onDevicesChanged: (callback: (payload: DevicesChangedPayload) => void): (() => void) =>
     window.api.onDevicesChanged((payload) =>
       callback(payload as DevicesChangedPayload)

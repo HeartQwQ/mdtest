@@ -1,6 +1,7 @@
 import { existsSync } from 'fs'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { log, logWarn } from '../log'
 import type { PcScanResult } from './types'
 import { getPcSearchSettings } from './pc-settings'
 
@@ -46,8 +47,10 @@ export async function scanPcByDirNames(
 
   const results: PcScanResult[] = []
   const seen = new Set<string>()
+  const drives = getDriveLetters()
+  log('game_scanner', `扫描盘符 ${drives.join(',')}，目录名 ${names.join(',')}，深度 ${depth}`)
 
-  for (const drive of getDriveLetters()) {
+  for (const drive of drives) {
     for (const dirName of names) {
       const filter = dirName.replace(/'/g, "''")
       const script = [
@@ -78,11 +81,12 @@ export async function scanPcByDirNames(
             label: parts[parts.length - 2] ?? dirName
           })
         }
-      } catch {
-        /* 单盘符失败继续 */
+      } catch (err) {
+        logWarn('game_scanner', `${drive}: 扫描 ${dirName} 失败`, err)
       }
     }
   }
 
+  log('game_scanner', `扫描原始命中 ${results.length} 条`)
   return results.sort((a, b) => a.path.localeCompare(b.path))
 }

@@ -7,16 +7,8 @@ files:
   - out/**/*
   - package.json
 extraResources:
-  - from: resources/platform-tools
-    to: platform-tools
-    filter:
-      - "**/*"
-  - from: resources/hdc-toolchains
-    to: hdc-toolchains
-    filter:
-      - "**/*"
-  - from: resources/libimobiledevice
-    to: libimobiledevice
+  - from: resources/device-toolchains
+    to: device-toolchains
     filter:
       - "**/*"
 win:

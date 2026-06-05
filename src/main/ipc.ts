@@ -1,11 +1,13 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { readFileSync } from 'fs'
 
+import { log } from './log'
 import { isBundledAdbPresent, resolveAdbPath } from './devices/adb-path'
 import { isBundledHdcPresent, resolveHdcPath } from './devices/hdc-path'
 import { isBundledIdevicePresent, resolveIdeviceToolchainDir } from './devices/idevice-path'
 import { listDevices, platformAvailability } from './devices/manager'
 import { deviceMonitor, type WatchPlatform } from './devices/device-monitor'
+import { removeCachedDevice } from './devices/device-registry'
 import type { DevicePlatform } from './devices/types'
 import {
   addMobileFavorite,
@@ -20,6 +22,7 @@ import {
   openFolderInExplorer,
   removeMobileFavorite,
   removePcPath,
+  removePcGameInstance,
   scanAndCachePcGames,
   setPcSearchSettings
 } from './games'
@@ -39,6 +42,26 @@ import {
 } from './files'
 
 export function registerIpc(): void {
+  ipcMain.handle('window:minimize', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize()
+  })
+  ipcMain.handle('window:toggleMaximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+    if (win.isMaximized()) {
+      win.unmaximize()
+      return false
+    }
+    win.maximize()
+    return true
+  })
+  ipcMain.handle('window:close', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close()
+  })
+  ipcMain.handle('window:isMaximized', (event) =>
+    BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
+  )
+
   ipcMain.handle('devices:list', (_event, platform: DevicePlatform) => listDevices(platform))
   ipcMain.handle('devices:availability', () => platformAvailability())
   ipcMain.handle('devices:adbPath', () => {
@@ -73,6 +96,17 @@ export function registerIpc(): void {
     deviceMonitor.stop(platform, event.sender)
   })
 
+  ipcMain.handle('devices:remove', async (_event, platform: DevicePlatform, deviceId: string) => {
+    let ok = false
+    if (platform === 'windows') {
+      ok = removePcGameInstance(deviceId)
+    } else {
+      ok = removeCachedDevice(platform, deviceId)
+    }
+    if (ok) await deviceMonitor.refresh(platform, true)
+    return ok
+  })
+
   ipcMain.handle('games:mobile:listPackages', (_e, platform: MobilePlatform, deviceId?: string) =>
     listMobilePackages(platform, deviceId)
   )
@@ -85,15 +119,26 @@ export function registerIpc(): void {
   ipcMain.handle('games:mobile:removeFavorite', (_e, id: string) => removeMobileFavorite(id))
 
   ipcMain.handle('games:pc:listPaths', () => listPcPaths())
-  ipcMain.handle('games:pc:addPath', (_e, path: string, label?: string, source?: 'manual' | 'search') =>
-    addPcPath(path, label, source ?? 'manual')
-  )
-  ipcMain.handle('games:pc:removePath', (_e, id: string) => removePcPath(id))
+  ipcMain.handle('games:pc:addPath', async (_e, path: string, label?: string, source?: 'manual' | 'search') => {
+    const entry = addPcPath(path, label, source ?? 'manual')
+    await deviceMonitor.refresh('windows', true)
+    return entry
+  })
+  ipcMain.handle('games:pc:removePath', async (_e, id: string) => {
+    const ok = removePcPath(id)
+    if (ok) await deviceMonitor.refresh('windows', true)
+    return ok
+  })
   ipcMain.handle('games:pc:getSearchSettings', () => getPcSearchSettings())
   ipcMain.handle('games:pc:setSearchSettings', (_e, settings) => setPcSearchSettings(settings))
   ipcMain.handle('games:pc:listInstances', () => listPcGameInstances())
   ipcMain.handle('games:pc:ensureLoaded', () => ensurePcGamesLoaded())
-  ipcMain.handle('games:pc:scan', () => scanAndCachePcGames())
+  ipcMain.handle('games:pc:scan', async () => {
+    log('game_scanner', 'IPC games:pc:scan')
+    const games = await scanAndCachePcGames()
+    await deviceMonitor.refresh('windows', true)
+    return games
+  })
   ipcMain.handle('games:pc:launch', (_e, exePath: string) => {
     launchExe(exePath)
   })

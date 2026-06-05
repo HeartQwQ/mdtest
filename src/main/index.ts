@@ -9,6 +9,8 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 640,
     show: false,
+    frame: false,
+    backgroundColor: '#09090b',
     autoHideMenuBar: true,
     title: '多端测试工具',
     webPreferences: {

@@ -91,8 +91,8 @@
       class="mb-4 rounded-lg border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-foreground"
       role="alert"
     >
-      未检测到 libimobiledevice 工具链。请在项目目录运行
-      <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">pnpm run setup:libimobiledevice</code>
+      未检测到 libimobiledevice 工具链。请将 Windows 版工具链放入
+      <code class="rounded bg-muted px-1 py-0.5 font-mono text-xs">resources/device-toolchains/ios/</code>
       ，并确保已安装 Apple Mobile Device Support（iTunes 组件）。
     </div>
   {/if}

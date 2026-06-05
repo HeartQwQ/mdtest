@@ -1,19 +1,33 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import { existsSync } from 'fs'
 import type { DeviceAdapter, DeviceInfo } from './types'
+import { listPcGameInstances } from '../games/pc-workspace'
+import type { PcGameInstance } from '../games/pc-enrich'
 
-const execFileAsync = promisify(execFile)
+function instanceToDevice(g: PcGameInstance): DeviceInfo {
+  const pathExists = existsSync(g.path)
+  let status: DeviceInfo['status'] = 'offline'
+  if (pathExists) {
+    status = g.hasExe ? 'online' : 'unknown'
+  }
 
-interface PsProcess {
-  Id: number
-  ProcessName: string
-  MainWindowTitle: string
+  return {
+    id: g.id,
+    platform: 'windows',
+    name: g.label || g.name || g.path,
+    status,
+    details: {
+      path: g.path,
+      hasExe: String(g.hasExe),
+      source: g.source,
+      ...(g.appVersion ? { appVersion: g.appVersion } : {}),
+      ...(g.srcVersion ? { srcVersion: g.srcVersion } : {})
+    }
+  }
 }
 
 /**
- * Windows 端接入（第一版）：通过 PowerShell 列出带主窗口的进程，
- * 作为「可被测试的 Win 端目标窗口」。不依赖原生模块，免 MSVC 编译。
- * 后续可替换为 Win32 EnumWindows 原生实现以获得句柄/类名/位置等完整信息。
+ * PC 端：ShadowTrackerExtra 游戏目录列表（扫描 + 手动添加），
+ * 目录存在视为在线，路径丢失视为离线。
  */
 export const windowsAdapter: DeviceAdapter = {
   platform: 'windows',
@@ -24,34 +38,12 @@ export const windowsAdapter: DeviceAdapter = {
 
   async listDevices(): Promise<DeviceInfo[]> {
     if (process.platform !== 'win32') return []
-
-    const script =
-      "Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | " +
-      'Select-Object Id,ProcessName,MainWindowTitle | ConvertTo-Json -Compress'
-
-    const { stdout } = await execFileAsync(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-      { timeout: 10000, maxBuffer: 4 * 1024 * 1024 }
-    )
-
-    let parsed: PsProcess[] = []
-    try {
-      const json = JSON.parse(stdout || '[]')
-      parsed = Array.isArray(json) ? json : [json]
-    } catch {
-      parsed = []
-    }
-
-    return parsed.map((p) => ({
-      id: String(p.Id),
-      platform: 'windows' as const,
-      name: p.MainWindowTitle || p.ProcessName,
-      status: 'online' as const,
-      details: {
-        pid: String(p.Id),
-        processName: p.ProcessName
-      }
-    }))
+    const instances = listPcGameInstances()
+    return instances.map(instanceToDevice).sort((a, b) => {
+      const ao = a.status === 'online' ? 0 : 1
+      const bo = b.status === 'online' ? 0 : 1
+      if (ao !== bo) return ao - bo
+      return a.name.localeCompare(b.name, 'zh-CN')
+    })
   }
 }

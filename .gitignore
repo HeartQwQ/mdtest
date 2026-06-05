@@ -6,13 +6,3 @@ dist/
 .vite/
 .env
 .env.*
-
-# 内置工具链（体积大，不提交仓库）
-resources/platform-tools/*
-!resources/platform-tools/.gitkeep
-resources/.tmp-platform-tools/
-resources/hdc-toolchains/*
-!resources/hdc-toolchains/.gitkeep
-resources/libimobiledevice/*
-!resources/libimobiledevice/.gitkeep
-resources/.tmp-libimobiledevice/

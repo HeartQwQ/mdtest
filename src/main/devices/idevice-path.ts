@@ -2,11 +2,11 @@ import { existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { resourcesSubdir } from './resources-path'
+import { deviceToolchainDir } from './resources-path'
 
 const execFileAsync = promisify(execFile)
 
-const TOOLCHAIN_DIR = resourcesSubdir('libimobiledevice')
+const TOOLCHAIN_DIR = deviceToolchainDir('ios')
 const IDEVICE_ID = join(TOOLCHAIN_DIR, 'idevice_id.exe')
 const IDEVICEINFO = join(TOOLCHAIN_DIR, 'ideviceinfo.exe')
 
@@ -15,7 +15,7 @@ let cachedReady: boolean | undefined
 export function resolveIdeviceToolchainDir(): string {
   if (!existsSync(IDEVICE_ID)) {
     throw new Error(
-      `未找到内置 libimobiledevice 工具: ${IDEVICE_ID}，请运行 pnpm run setup:libimobiledevice`
+      `未找到内置 libimobiledevice 工具: ${IDEVICE_ID}，请将工具链放入 resources/device-toolchains/ios/`
     )
   }
   return TOOLCHAIN_DIR
@@ -34,7 +34,7 @@ export async function runIdevice(
   const dir = resolveIdeviceToolchainDir()
   const exe = join(dir, `${tool}.exe`)
   if (!existsSync(exe)) {
-    throw new Error(`未找到 ${tool}.exe，请运行 pnpm run setup:libimobiledevice`)
+    throw new Error(`未找到 ${tool}.exe，请将 libimobiledevice 工具链放入 resources/device-toolchains/ios/`)
   }
 
   try {

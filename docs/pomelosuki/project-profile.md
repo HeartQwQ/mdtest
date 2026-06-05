@@ -19,12 +19,17 @@
 | 区域 | 路径 |
 |------|------|
 | 渲染入口 | `src/renderer/src/main.ts`、`App.svelte` |
-| 业务组件 | `src/renderer/src/lib/components/*.svelte` |
-| shadcn 组件 | `src/renderer/src/lib/components/ui/**`（`$lib/components/ui`） |
+| 主导航 | `src/renderer/src/lib/components/nav/`（`AppSidebar`、`TeamSwitcher`、`NavUser`） |
+| 自绘标题栏 | `src/renderer/src/lib/components/Titlebar.svelte` |
+| 页面视图 | `src/renderer/src/lib/views/`（`HomeView`、`DeviceManagementView`、`SettingsView`） |
+| 视图路由 | `src/renderer/src/lib/stores/view.svelte.ts` |
+| 导航数据 | `src/renderer/src/lib/nav/nav-data.ts` |
+| 业务组件（旧） | `src/renderer/src/lib/components/*.svelte`（逐步迁移） |
+| shadcn 组件 | `src/renderer/src/lib/components/ui/**` |
 | 工具函数 | `src/renderer/src/lib/utils.ts`（`cn()`） |
-| 样式 / token | `src/renderer/src/app.css` |
+| 样式 / token | `src/renderer/src/app.css`（含 `drag-region` / `no-drag`） |
 | 主题状态 | `src/renderer/src/lib/stores/theme.svelte.ts` |
-| 主题控件 | `src/renderer/src/lib/components/ThemeSwitcher.svelte` |
+| 产品需求 | `docs/requirements.md` |
 | 构建配置 | `electron.vite.config.ts`（alias `$lib`） |
 
 ## 3. 主题与 token 体系
@@ -44,10 +49,13 @@
 
 ## 4. 默认设计基调
 
-- **Dark & Premium 开发者工具风**：克制、信息密度高、青色作单一强调。
-- 布局：侧栏 `w-56` + 主区 `min-w-0 flex-1`；最小窗口约 960×640。
-- 圆角 `rounded-lg` / `rounded-xl`；面板用 `Card` 或 `bg-card border-border`。
-- 优先 shadcn 组件（`Button`/`Card`/`Badge`/`Input`/`ScrollArea`/`Select`/`DropdownMenu`/`Tooltip`），避免硬编码 `zinc-*` / `cyan-*`。
+- **Dark & Premium 开发者工具风**：克制、信息密度高、primary/cyan 作单一强调。
+- **窗口**：无边框（`frame: false`）+ 自绘 `Titlebar`（`-webkit-app-region: drag`）。
+- **主导航**：icon 侧栏 `w-14`，hover tooltip；顶/底占位区复刻 tauri 视觉。
+- **设备管理页**：左设备区 `w-64` · 中投屏/文件 · 右日志/AI `w-72`；最小窗口 960×640。
+- **四端顺序与图标**：**PC → 安卓 → iOS → 鸿蒙**；手机三端统一 `Smartphone`，PC 用 `Monitor`。
+- 圆角 `rounded-lg` / `rounded-xl`；面板用 `bg-card border-border`。
+- 优先 shadcn 组件，避免硬编码 `zinc-*` / `cyan-*`。
 
 ## 5. 落地与验证命令
 
