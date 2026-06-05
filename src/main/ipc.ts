@@ -3,7 +3,9 @@ import { readFileSync } from 'fs'
 
 import { isBundledAdbPresent, resolveAdbPath } from './devices/adb-path'
 import { isBundledHdcPresent, resolveHdcPath } from './devices/hdc-path'
+import { isBundledIdevicePresent, resolveIdeviceToolchainDir } from './devices/idevice-path'
 import { listDevices, platformAvailability } from './devices/manager'
+import { deviceMonitor, type WatchPlatform } from './devices/device-monitor'
 import type { DevicePlatform } from './devices/types'
 import {
   addMobileFavorite,
@@ -55,6 +57,21 @@ export function registerIpc(): void {
     }
   })
   ipcMain.handle('devices:bundledHdc', () => isBundledHdcPresent())
+  ipcMain.handle('devices:idevicePath', () => {
+    try {
+      return resolveIdeviceToolchainDir()
+    } catch {
+      return null
+    }
+  })
+  ipcMain.handle('devices:bundledIdevice', () => isBundledIdevicePresent())
+
+  ipcMain.handle('devices:startWatch', (event, platform: WatchPlatform) => {
+    deviceMonitor.start(platform, event.sender)
+  })
+  ipcMain.handle('devices:stopWatch', (event, platform: WatchPlatform) => {
+    deviceMonitor.stop(platform, event.sender)
+  })
 
   ipcMain.handle('games:mobile:listPackages', (_e, platform: MobilePlatform, deviceId?: string) =>
     listMobilePackages(platform, deviceId)

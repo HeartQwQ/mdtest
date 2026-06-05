@@ -23,5 +23,25 @@ export const ipc = {
 
   hdcPath: (): Promise<string | null> => window.api.hdcPath() as Promise<string | null>,
 
-  bundledHdc: (): Promise<boolean> => window.api.bundledHdc() as Promise<boolean>
+  bundledHdc: (): Promise<boolean> => window.api.bundledHdc() as Promise<boolean>,
+
+  idevicePath: (): Promise<string | null> => window.api.idevicePath() as Promise<string | null>,
+
+  bundledIdevice: (): Promise<boolean> => window.api.bundledIdevice() as Promise<boolean>,
+
+  startDeviceWatch: (platform: DevicePlatform): Promise<void> =>
+    window.api.startDeviceWatch(platform) as Promise<void>,
+
+  stopDeviceWatch: (platform: DevicePlatform): Promise<void> =>
+    window.api.stopDeviceWatch(platform) as Promise<void>,
+
+  onDevicesChanged: (callback: (payload: DevicesChangedPayload) => void): (() => void) =>
+    window.api.onDevicesChanged((payload) =>
+      callback(payload as DevicesChangedPayload)
+    ) as () => void
+}
+
+export interface DevicesChangedPayload {
+  platform: DevicePlatform
+  devices: DeviceInfo[]
 }

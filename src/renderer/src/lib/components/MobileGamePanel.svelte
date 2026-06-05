@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RefreshCw, Star, Package, Smartphone } from '@lucide/svelte'
+  import { Star, Package, Smartphone } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Card from '$lib/components/ui/card'
   import { ScrollArea } from '$lib/components/ui/scroll-area'
@@ -8,6 +8,7 @@
   import { gamesApi, type InstalledPackage, type MobilePackageFavorite } from '../games'
   import { statusDotClass } from '../ui/status'
   import FileExplorer from './FileExplorer.svelte'
+  import { reconcileSelectedDevice, watchMobileDevices } from '../devices/watch'
 
   let { platform }: { platform: 'android' | 'harmony' } = $props()
 
@@ -36,19 +37,22 @@
     unknown: '未知'
   }
 
-  async function refreshDevices(): Promise<void> {
-    loading = true
-    error = null
-    selectedDevice = null
-    selectedPackage = null
-    try {
-      devices = await ipc.listDevices(platform)
-      favorites = await gamesApi.listFavorites()
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e)
-      devices = []
-    } finally {
-      loading = false
+  function applyDeviceList(list: DeviceInfo[]): void {
+    const prev = selectedDevice
+    devices = list
+    const next = reconcileSelectedDevice(selectedDevice, list)
+    selectedDevice = next
+
+    if (!next) {
+      if (prev) {
+        selectedPackage = null
+        packages = []
+      }
+      return
+    }
+
+    if (prev?.status !== 'online' && next.status === 'online') {
+      void loadPackages()
     }
   }
 
@@ -84,13 +88,32 @@
   }
 
   $effect(() => {
-    void platform
-    refreshDevices()
-    if (platform === 'android') {
+    const currentPlatform = platform
+    selectedDevice = null
+    selectedPackage = null
+    packages = []
+    error = null
+
+    if (currentPlatform === 'android') {
       ipc.adbPath().then((p) => (toolPath = p))
     } else {
       ipc.hdcPath().then((p) => (toolPath = p))
     }
+
+    void gamesApi.listFavorites().then((f) => (favorites = f))
+
+    const stop = watchMobileDevices(currentPlatform, {
+      onLoading: (v) => (loading = v),
+      onError: (msg) => {
+        if (msg) {
+          error = msg
+          devices = []
+        }
+      },
+      onDevices: (list) => applyDeviceList(list)
+    })
+
+    return stop
   })
 </script>
 
@@ -102,17 +125,20 @@
         <span class="text-xs font-medium uppercase tracking-wider">{meta[platform].tool}</span>
       </div>
       <h1 class="mt-2 text-xl font-semibold tracking-tight">{meta[platform].title}</h1>
-      <p class="mt-1 text-sm text-muted-foreground">收藏包后可管理应用数据目录</p>
+      <p class="mt-1 text-sm text-muted-foreground">收藏包后可管理应用数据目录，设备自动检测</p>
       {#if toolPath}
         <p class="mt-2 max-w-2xl truncate font-mono text-[11px] text-muted-foreground" title={toolPath}>
           {toolPath}
         </p>
       {/if}
     </div>
-    <Button onclick={refreshDevices} disabled={loading}>
-      <RefreshCw class={cn('size-4', loading && 'animate-spin')} />
-      {loading ? '刷新中…' : '刷新设备'}
-    </Button>
+    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+      <span
+        class={cn('size-2 rounded-full', loading ? 'animate-pulse bg-primary' : 'bg-online')}
+        title={loading ? '正在检测' : '自动检测中'}
+      ></span>
+      {loading ? '正在检测…' : '自动检测中'}
+    </div>
   </header>
 
   {#if error}
@@ -244,7 +270,7 @@
           <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
             <p>设备需在线才能管理文件</p>
             {#if selectedDevice.status === 'unauthorized'}
-              <p class="text-xs text-warn">请在手机上允许 USB 调试后刷新</p>
+              <p class="text-xs text-warn">请在手机上允许 USB 调试，授权后将自动上线</p>
             {/if}
           </div>
         {:else if !selectedPackage}

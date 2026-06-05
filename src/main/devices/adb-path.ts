@@ -40,3 +40,12 @@ export async function isAdbAvailable(): Promise<boolean> {
     return false
   }
 }
+
+/** 确保 adb server 已启动（监测长连接前调用）。失败静默，由调用方重试。 */
+export async function ensureAdbServer(): Promise<void> {
+  try {
+    await runAdb(['start-server'])
+  } catch {
+    /* 由 tracker 重连逻辑处理 */
+  }
+}

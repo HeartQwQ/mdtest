@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 
 const api = {
   listDevices: (platform: string) => ipcRenderer.invoke('devices:list', platform),
@@ -7,6 +7,16 @@ const api = {
   bundledAdb: () => ipcRenderer.invoke('devices:bundledAdb'),
   hdcPath: () => ipcRenderer.invoke('devices:hdcPath'),
   bundledHdc: () => ipcRenderer.invoke('devices:bundledHdc'),
+  idevicePath: () => ipcRenderer.invoke('devices:idevicePath'),
+  bundledIdevice: () => ipcRenderer.invoke('devices:bundledIdevice'),
+
+  startDeviceWatch: (platform: string) => ipcRenderer.invoke('devices:startWatch', platform),
+  stopDeviceWatch: (platform: string) => ipcRenderer.invoke('devices:stopWatch', platform),
+  onDevicesChanged: (callback: (payload: unknown) => void) => {
+    const listener = (_event: IpcRendererEvent, payload: unknown): void => callback(payload)
+    ipcRenderer.on('devices:changed', listener)
+    return () => ipcRenderer.removeListener('devices:changed', listener)
+  },
 
   gamesMobileListPackages: (platform: string, deviceId?: string) =>
     ipcRenderer.invoke('games:mobile:listPackages', platform, deviceId),

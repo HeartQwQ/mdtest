@@ -22,6 +22,16 @@ export async function listDevices(platform: DevicePlatform): Promise<DeviceInfo[
   }
 }
 
+/**
+ * 与 listDevices 相同，但不吞错。用于设备监测，区分「确实没有设备」（返回 []）
+ * 与「调用失败」（抛错，监测层保留上次列表，避免闪断）。
+ */
+export async function listDevicesOrThrow(platform: DevicePlatform): Promise<DeviceInfo[]> {
+  const adapter = adapters[platform]
+  if (!adapter) return []
+  return adapter.listDevices()
+}
+
 export async function platformAvailability(): Promise<Record<DevicePlatform, boolean>> {
   const platforms = Object.keys(adapters) as DevicePlatform[]
   const entries = await Promise.all(

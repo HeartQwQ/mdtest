@@ -136,7 +136,7 @@
 
   <p class="mt-3 px-2 text-[11px] leading-relaxed text-muted-foreground">
 
-    绿点表示 adb / hdc 等工具链可用
+    绿点表示 adb / hdc / libimobiledevice 工具链可用
 
   </p>
 

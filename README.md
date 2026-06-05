@@ -22,7 +22,8 @@ src/
 │       ├── manager.ts     设备管理器（按平台分发）
 │       ├── android.ts     安卓适配器（adb）— 已实现
 │       ├── windows.ts     Windows 适配器（PowerShell）— 已实现
-│       ├── ios.ts         iOS 适配器 — 预留
+│       ├── ios.ts         iOS 适配器（libimobiledevice）— 已实现
+│       ├── idevice-path.ts  iOS 工具链路径
 │       └── harmony.ts     鸿蒙适配器 — 预留
 ├── preload/               contextBridge 安全桥接
 └── renderer/              Svelte 5 渲染层
@@ -63,7 +64,7 @@ pnpm check
 |------|------|------|
 | 安卓 | **内置 adb** | `resources/platform-tools/adb.exe` |
 | Windows | 无 | 使用系统自带 PowerShell |
-| iOS | libimobiledevice | 后续接入 |
+| iOS | **内置 libimobiledevice** | `resources/libimobiledevice/idevice_id.exe`；另需 Apple Mobile Device Support（iTunes 组件） |
 | 鸿蒙 | **内置 hdc** | `resources/hdc-toolchains/toolchains/hdc.exe` |
 
 ## 架构约定
@@ -80,5 +81,6 @@ pnpm check
 - [ ] 安卓包信息 / 安装 APK / 日志
 - [ ] Windows 窗口截图（Win32 / windows-capture）
 - [ ] scrcpy 投屏与操控
-- [ ] iOS（libimobiledevice）
+- [x] iOS 设备列表（idevice_id / ideviceinfo）
+- [ ] iOS 应用列表 / 文件（ideviceinstaller / AFC）
 - [ ] 鸿蒙（HDC）

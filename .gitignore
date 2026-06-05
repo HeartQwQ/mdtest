@@ -13,3 +13,6 @@ resources/platform-tools/*
 resources/.tmp-platform-tools/
 resources/hdc-toolchains/*
 !resources/hdc-toolchains/.gitkeep
+resources/libimobiledevice/*
+!resources/libimobiledevice/.gitkeep
+resources/.tmp-libimobiledevice/
