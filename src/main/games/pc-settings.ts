@@ -10,7 +10,7 @@ export function setPcSearchSettings(settings: Partial<PcSearchSettings>): PcSear
     if (settings.dirNames?.length) {
       s.pcSearch.dirNames = settings.dirNames.map((n) => n.trim()).filter(Boolean)
     }
-    if (settings.maxDepth !== undefined && settings.maxDepth >= 1 && settings.maxDepth <= 6) {
+    if (settings.maxDepth !== undefined && settings.maxDepth >= 1 && settings.maxDepth <= 8) {
       s.pcSearch.maxDepth = settings.maxDepth
     }
   })

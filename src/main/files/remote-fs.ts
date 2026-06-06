@@ -49,6 +49,18 @@ function parseLsLine(line: string, parentRemote: string): FileEntry | null {
   }
 }
 
+function parseLsOutput(out: string, remote: string, relativePath: string): FileEntry[] {
+  const entries: FileEntry[] = []
+  for (const line of out.split(/\r?\n/)) {
+    const ent = parseLsLine(line, remote)
+    if (ent) {
+      ent.path = relativePath ? joinRemote(relativePath, ent.name) : ent.name
+      entries.push(ent)
+    }
+  }
+  return entries
+}
+
 async function runShell(
   platform: MobilePlatform,
   deviceId: string,
@@ -69,17 +81,9 @@ export async function listMobileDir(
 ): Promise<{ root: string; entries: FileEntry[] }> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
   const remote = joinRemote(root, relativePath)
-
-  const out = await runShell(platform, deviceId, ['ls', '-la', shellQuote(remote)])
-  const entries: FileEntry[] = []
-
-  for (const line of out.split(/\r?\n/)) {
-    const ent = parseLsLine(line, remote)
-    if (ent) {
-      ent.path = relativePath ? joinRemote(relativePath, ent.name) : ent.name
-      entries.push(ent)
-    }
-  }
+  const listTarget = remote.endsWith('/') ? remote : `${remote}/`
+  const out = await runShell(platform, deviceId, ['ls', '-la', shellQuote(listTarget)])
+  const entries = parseLsOutput(out, remote, relativePath)
 
   return {
     root,

@@ -6,7 +6,7 @@ import { isBundledAdbPresent, resolveAdbPath } from './devices/adb-path'
 import { isBundledHdcPresent, resolveHdcPath } from './devices/hdc-path'
 import { isBundledIdevicePresent, resolveIdeviceToolchainDir } from './devices/idevice-path'
 import { listDevices, platformAvailability } from './devices/manager'
-import { deviceMonitor, type WatchPlatform } from './devices/device-monitor'
+import { deviceMonitor, initDeviceMonitoring, type WatchPlatform } from './devices/device-monitor'
 import { removeCachedDevice } from './devices/device-registry'
 import type { DevicePlatform } from './devices/types'
 import {
@@ -28,20 +28,35 @@ import {
 } from './games'
 import type { MobilePlatform } from './games/types'
 import {
+  deleteDevicePath,
   deleteLocalPath,
   deleteMobilePath,
+  listDeviceDir,
   listLocalDir,
   listMobileDir,
+  mkdirDevice,
   mkdirLocal,
   mkdirMobile,
+  readDeviceFile,
   readLocalFile,
   readMobileFile,
   renameLocal,
+  writeDeviceFile,
   writeLocalFile,
-  writeMobileFile
+  writeMobileFile,
+  dirCache,
+  makeCacheKey,
+  listAppDir,
+  readAppFile,
+  writeAppFile,
+  deleteAppPath,
+  mkdirApp
 } from './files'
+import type { DeviceFsPlatform } from './files'
 
 export function registerIpc(): void {
+  initDeviceMonitoring()
+
   ipcMain.handle('window:minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize()
   })
@@ -204,6 +219,73 @@ export function registerIpc(): void {
       mkdirMobile(platform, deviceId, packageId, relativePath)
   )
 
+  ipcMain.handle(
+    'files:device:list',
+    (_e, platform: DeviceFsPlatform, deviceId: string, relativePath?: string) =>
+      listDeviceDir(platform, deviceId, relativePath ?? '')
+  )
+  ipcMain.handle(
+    'files:device:read',
+    (_e, platform: DeviceFsPlatform, deviceId: string, relativePath: string) =>
+      readDeviceFile(platform, deviceId, relativePath)
+  )
+  ipcMain.handle(
+    'files:device:write',
+    (
+      _e,
+      platform: DeviceFsPlatform,
+      deviceId: string,
+      relativePath: string,
+      content: string,
+      binary?: boolean
+    ) => writeDeviceFile(platform, deviceId, relativePath, content, binary ?? false)
+  )
+  ipcMain.handle(
+    'files:device:delete',
+    (_e, platform: DeviceFsPlatform, deviceId: string, relativePath: string) =>
+      deleteDevicePath(platform, deviceId, relativePath)
+  )
+  ipcMain.handle(
+    'files:device:mkdir',
+    (_e, platform: DeviceFsPlatform, deviceId: string, relativePath: string) =>
+      mkdirDevice(platform, deviceId, relativePath)
+  )
+
+  // ---- 应用包目录 IPC（移动三端统一入口） ----
+
+  ipcMain.handle(
+    'files:app:list',
+    (_e, platform: DeviceFsPlatform, deviceId: string, packageId: string, relativePath?: string) =>
+      listAppDir(platform, deviceId, packageId, relativePath ?? '')
+  )
+  ipcMain.handle(
+    'files:app:read',
+    (_e, platform: DeviceFsPlatform, deviceId: string, packageId: string, relativePath: string) =>
+      readAppFile(platform, deviceId, packageId, relativePath)
+  )
+  ipcMain.handle(
+    'files:app:write',
+    (
+      _e,
+      platform: DeviceFsPlatform,
+      deviceId: string,
+      packageId: string,
+      relativePath: string,
+      content: string,
+      binary?: boolean
+    ) => writeAppFile(platform, deviceId, packageId, relativePath, content, binary ?? false)
+  )
+  ipcMain.handle(
+    'files:app:delete',
+    (_e, platform: DeviceFsPlatform, deviceId: string, packageId: string, relativePath: string) =>
+      deleteAppPath(platform, deviceId, packageId, relativePath)
+  )
+  ipcMain.handle(
+    'files:app:mkdir',
+    (_e, platform: DeviceFsPlatform, deviceId: string, packageId: string, relativePath: string) =>
+      mkdirApp(platform, deviceId, packageId, relativePath)
+  )
+
   ipcMain.handle('files:pickLocalFile', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openFile'] })
     if (result.canceled || !result.filePaths[0]) return null
@@ -215,5 +297,63 @@ export function registerIpc(): void {
       content: binary ? buf.toString('base64') : buf.toString('utf8'),
       binary
     }
+  })
+
+  // ---- 目录缓存 IPC ----
+
+  /** 预热：设备连接后立即异步加载根目录（不等待结果） */
+  ipcMain.handle(
+    'cache:preload',
+    async (
+      _e,
+      mode: 'local' | 'device',
+      opts: { root?: string; platform?: string; deviceId?: string; packageId?: string }
+    ) => {
+      const key = makeCacheKey(mode, { ...opts, relativePath: '' })
+      if (dirCache.get(key)) return // 已有缓存，跳过
+      try {
+        if (mode === 'local' && opts.root) {
+          const entries = listLocalDir(opts.root)
+          dirCache.set(key, { entries })
+        } else if (mode === 'device' && opts.platform && opts.deviceId) {
+          await listDeviceDir(opts.platform as DeviceFsPlatform, opts.deviceId, '')
+        }
+      } catch {
+        // 预热失败不影响正常流程
+      }
+    }
+  )
+
+  /** 使指定路径的缓存失效 */
+  ipcMain.handle(
+    'cache:invalidate',
+    (
+      _e,
+      mode: 'local' | 'device' | 'mobile',
+      opts: {
+        root?: string
+        platform?: string
+        deviceId?: string
+        packageId?: string
+        relativePath?: string
+      }
+    ) => {
+      const key = makeCacheKey(mode, opts)
+      dirCache.invalidate(key)
+    }
+  )
+
+  /** 使某个设备的所有缓存失效 */
+  ipcMain.handle(
+    'cache:invalidateDevice',
+    (_e, platform: string, deviceId: string) => {
+      const prefix = `device:${platform}:${deviceId}:`
+      dirCache.invalidatePrefix(prefix)
+    }
+  )
+
+  /** 清除所有缓存 */
+  ipcMain.handle('cache:clear', () => {
+    dirCache.clear()
   })
 }

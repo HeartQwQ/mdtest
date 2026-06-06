@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { registerIpc } from './ipc'
+import { dirCache } from './files'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -37,12 +38,17 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  dirCache.loadFromDisk()
   registerIpc()
   createWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('will-quit', () => {
+  dirCache.saveToDisk()
 })
 
 app.on('window-all-closed', () => {

@@ -83,7 +83,57 @@ const api = {
     ipcRenderer.invoke('files:mobile:delete', platform, deviceId, packageId, relativePath),
   filesMobileMkdir: (platform: string, deviceId: string, packageId: string, relativePath: string) =>
     ipcRenderer.invoke('files:mobile:mkdir', platform, deviceId, packageId, relativePath),
-  filesPickLocalFile: () => ipcRenderer.invoke('files:pickLocalFile')
+
+  filesDeviceList: (platform: string, deviceId: string, relativePath?: string) =>
+    ipcRenderer.invoke('files:device:list', platform, deviceId, relativePath),
+  filesDeviceRead: (platform: string, deviceId: string, relativePath: string) =>
+    ipcRenderer.invoke('files:device:read', platform, deviceId, relativePath),
+  filesDeviceWrite: (
+    platform: string,
+    deviceId: string,
+    relativePath: string,
+    content: string,
+    binary?: boolean
+  ) => ipcRenderer.invoke('files:device:write', platform, deviceId, relativePath, content, binary),
+  filesDeviceDelete: (platform: string, deviceId: string, relativePath: string) =>
+    ipcRenderer.invoke('files:device:delete', platform, deviceId, relativePath),
+  filesDeviceMkdir: (platform: string, deviceId: string, relativePath: string) =>
+    ipcRenderer.invoke('files:device:mkdir', platform, deviceId, relativePath),
+  filesPickLocalFile: () => ipcRenderer.invoke('files:pickLocalFile'),
+
+  filesAppList: (platform: string, deviceId: string, packageId: string, relativePath?: string) =>
+    ipcRenderer.invoke('files:app:list', platform, deviceId, packageId, relativePath),
+  filesAppRead: (platform: string, deviceId: string, packageId: string, relativePath: string) =>
+    ipcRenderer.invoke('files:app:read', platform, deviceId, packageId, relativePath),
+  filesAppWrite: (
+    platform: string,
+    deviceId: string,
+    packageId: string,
+    relativePath: string,
+    content: string,
+    binary?: boolean
+  ) =>
+    ipcRenderer.invoke('files:app:write', platform, deviceId, packageId, relativePath, content, binary),
+  filesAppDelete: (platform: string, deviceId: string, packageId: string, relativePath: string) =>
+    ipcRenderer.invoke('files:app:delete', platform, deviceId, packageId, relativePath),
+  filesAppMkdir: (platform: string, deviceId: string, packageId: string, relativePath: string) =>
+    ipcRenderer.invoke('files:app:mkdir', platform, deviceId, packageId, relativePath),
+
+  cachePreload: (mode: 'local' | 'device', opts: object) =>
+    ipcRenderer.invoke('cache:preload', mode, opts),
+  cacheInvalidate: (
+    mode: 'local' | 'device' | 'mobile',
+    opts: {
+      root?: string
+      platform?: string
+      deviceId?: string
+      packageId?: string
+      relativePath?: string
+    }
+  ) => ipcRenderer.invoke('cache:invalidate', mode, opts),
+  cacheInvalidateDevice: (platform: string, deviceId: string) =>
+    ipcRenderer.invoke('cache:invalidateDevice', platform, deviceId),
+  cacheClear: () => ipcRenderer.invoke('cache:clear')
 }
 
 contextBridge.exposeInMainWorld('api', api)

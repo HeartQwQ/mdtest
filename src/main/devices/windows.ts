@@ -5,16 +5,12 @@ import type { PcGameInstance } from '../games/pc-enrich'
 
 function instanceToDevice(g: PcGameInstance): DeviceInfo {
   const pathExists = existsSync(g.path)
-  let status: DeviceInfo['status'] = 'offline'
-  if (pathExists) {
-    status = g.hasExe ? 'online' : 'unknown'
-  }
 
   return {
     id: g.id,
     platform: 'windows',
     name: g.label || g.name || g.path,
-    status,
+    status: pathExists ? 'online' : 'offline',
     details: {
       path: g.path,
       hasExe: String(g.hasExe),

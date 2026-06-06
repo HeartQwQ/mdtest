@@ -10,7 +10,7 @@ const DEFAULT_STORE: GamesStore = {
   pcPaths: [],
   pcSearch: {
     dirNames: ['ShadowTrackerExtra'],
-    maxDepth: 3
+    maxDepth: 5
   }
 }
 

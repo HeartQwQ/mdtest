@@ -30,13 +30,6 @@
     harmony: { title: '鸿蒙设备', tool: 'HDC' }
   }
 
-  const statusLabel: Record<string, string> = {
-    online: '在线',
-    offline: '离线',
-    unauthorized: '未授权',
-    unknown: '未知'
-  }
-
   function applyDeviceList(list: DeviceInfo[]): void {
     const prev = selectedDevice
     devices = list
@@ -172,11 +165,8 @@
                   )}
                   onclick={() => selectDevice(d)}
                 >
-                  <span class="size-2 shrink-0 rounded-full {statusDotClass(d.status)}"></span>
+                  <span class="size-2 shrink-0 rounded-full {statusDotClass(d.status, d.platform)}"></span>
                   <span class="min-w-0 flex-1 truncate">{d.name}</span>
-                  <span class="shrink-0 text-[10px] text-muted-foreground">
-                    {statusLabel[d.status] ?? d.status}
-                  </span>
                 </button>
               </li>
             {/each}

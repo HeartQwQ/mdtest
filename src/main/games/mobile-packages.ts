@@ -1,6 +1,13 @@
 import type { InstalledPackage, MobilePlatform } from './types'
 import { runAdb } from '../devices/adb-path'
 import { runHdc } from '../devices/hdc-path'
+import { runIdevice } from '../devices/idevice-path'
+
+/** iOS 已安装应用列表项 */
+interface IosAppEntry {
+  bundleId: string
+  name?: string
+}
 
 function parsePmList(stdout: string, platform: MobilePlatform, deviceId: string): InstalledPackage[] {
   const seen = new Set<string>()
@@ -16,6 +23,11 @@ function parsePmList(stdout: string, platform: MobilePlatform, deviceId: string)
     }
 
     if (!pkg || seen.has(pkg)) continue
+
+    // 严格验证包名格式：只允许字母、数字、下划线、点号，且至少包含一个点
+    // 过滤掉 stderr 混入的错误行（如 "/bin/sh: pm: inaccessible or not found"）
+    if (!/^[a-zA-Z][a-zA-Z0-9_.]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(pkg)) continue
+
     seen.add(pkg)
 
     list.push({
@@ -85,10 +97,68 @@ export async function listHarmonyPackages(deviceId?: string): Promise<InstalledP
   return list.sort((a, b) => a.applicationId.localeCompare(b.applicationId))
 }
 
+/** iOS：通过 ideviceinstaller -l 列出已安装应用 */
+export async function listIosPackages(deviceId?: string): Promise<InstalledPackage[]> {
+  const args = deviceId ? ['-u', deviceId, '-l', '-o', 'list_all'] : ['-l', '-o', 'list_all']
+  try {
+    const out = await runIdevice('ideviceinstaller', args)
+    return parseIosPackageList(out, deviceId ?? 'default')
+  } catch {
+    // fallback: 尝试不带 -o list_all
+    try {
+      const args2 = deviceId ? ['-u', deviceId, '-l'] : ['-l']
+      const out2 = await runIdevice('ideviceinstaller', args2)
+      return parseIosPackageList(out2, deviceId ?? 'default')
+    } catch {
+      return []
+    }
+  }
+}
+
+function parseIosPackageList(stdout: string, deviceId: string): InstalledPackage[] {
+  const seen = new Set<string>()
+  const list: InstalledPackage[] = []
+
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // ideviceinstaller 输出格式:
+    //   CFBundleIdentifier: com.example.app
+    //   或直接每行一个 bundleId
+    let bundleId = trimmed
+
+    // 处理 "key: value" 格式
+    const colonIdx = trimmed.indexOf(':')
+    if (colonIdx > 0 && colonIdx < trimmed.length - 1) {
+      const key = trimmed.slice(0, colonIdx).trim()
+      if (key === 'CFBundleIdentifier' || key.toLowerCase().includes('bundle')) {
+        bundleId = trimmed.slice(colonIdx + 1).trim()
+      }
+    }
+
+    // 过滤非包名行（空行、标题行等）
+    if (!bundleId || bundleId.includes(' ') && !bundleId.startsWith('com.')) continue
+    if (!/^[a-zA-Z0-9.-]+$/.test(bundleId)) continue
+    if (seen.has(bundleId)) continue
+    seen.add(bundleId)
+
+    list.push({
+      applicationId: bundleId,
+      platform: 'ios' as MobilePlatform,
+      deviceId,
+      label: bundleId
+    })
+  }
+
+  return list.sort((a, b) => a.applicationId.localeCompare(b.applicationId))
+}
+
 export async function listMobilePackages(
-  platform: MobilePlatform,
+  platform: MobilePlatform | 'ios',
   deviceId?: string
 ): Promise<InstalledPackage[]> {
   if (platform === 'android') return listAndroidPackages(deviceId)
+  if (platform === 'ios') return listIosPackages(deviceId)
   return listHarmonyPackages(deviceId)
 }

@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { isBundledAdbPresent } from './adb-path'
+import { isBundledAdbPresent, ensureAdbServer } from './adb-path'
 import { createAdbTracker, type AdbTracker } from './adb-server'
 import { mergeWithCache, upsertFromLive } from './device-registry'
 import { listDevicesOrThrow } from './manager'
@@ -10,8 +10,8 @@ export type WatchPlatform = DevicePlatform
 
 export const DEVICES_CHANGED_CHANNEL = 'devices:changed'
 
-const POLL_MS: Record<Exclude<WatchPlatform, 'windows'>, number> = {
-  android: 3000,
+/** 鸿蒙 / iOS 暂无稳定长连接事件，主进程定时刷新；安卓仅用 track-devices，无定时器。 */
+const POLL_MS: Partial<Record<Exclude<WatchPlatform, 'windows' | 'android'>, number>> = {
   harmony: 2500,
   ios: 3000
 }
@@ -26,20 +26,23 @@ interface Mechanism {
 }
 
 function snapshot(devices: DeviceInfo[]): string {
+  // 只比对稳定字段：id + status + name。
+  // 排除 details —— ideviceinfo 每次轮询可能返回微小差异的字段，
+  // 导致 snapshot 每次不同从而触发无意义的 broadcast。
   return JSON.stringify(
-    devices.map((d) => ({ id: d.id, status: d.status, name: d.name, details: d.details }))
+    devices.map((d) => ({ id: d.id, status: d.status, name: d.name }))
   )
 }
 
-function mergeList(platform: WatchPlatform, live: DeviceInfo[]): DeviceInfo[] {
+function mergeList(platform: WatchPlatform, live: DeviceInfo[], confirmedEmpty = false): DeviceInfo[] {
   if (platform === 'windows') return live
-  return mergeWithCache(platform, live)
+  return mergeWithCache(platform, live, { confirmedEmpty })
 }
 
 /**
  * 主进程统一设备监测：
- * - 安卓：adb host:track-devices 长连接
- * - 鸿蒙 / iOS：定时刷新
+ * - 安卓：adb host:track-devices 长连接，变化时 listDevices 取详情（零定时轮询）
+ * - 鸿蒙 / iOS：主进程定时刷新（工具链暂无稳定事件 API）
  * - PC：仅读缓存/手动路径，全量扫描由用户触发
  */
 class DeviceMonitor {
@@ -48,6 +51,7 @@ class DeviceMonitor {
   private lastDevices = new Map<WatchPlatform, DeviceInfo[]>()
   private lastSnapshot = new Map<WatchPlatform, string>()
   private busy = new Set<WatchPlatform>()
+  private pendingRefresh = new Set<WatchPlatform>()
   private pendingForce = new Set<WatchPlatform>()
   /** 同一 WebContents 订阅多端时只注册一次 destroyed，避免 MaxListenersExceededWarning。 */
   private destroyBound = new WeakSet<WebContents>()
@@ -108,30 +112,38 @@ class DeviceMonitor {
     }
 
     if (platform === 'android' && isBundledAdbPresent()) {
-      const tracker: AdbTracker = createAdbTracker(() => void this.refresh('android'))
-      this.mechanisms.set('android', tracker)
+      const tracker: AdbTracker = createAdbTracker(() => {
+        void this.doRefresh('android', false)
+      })
+      this.mechanisms.set('android', { stop: () => tracker.stop() })
       return
     }
 
-    const timer = setInterval(() => void this.refresh(platform), POLL_MS[platform as Exclude<WatchPlatform, 'windows'>])
+    const intervalMs = POLL_MS[platform as keyof typeof POLL_MS]
+    if (!intervalMs) return
+
+    const timer = setInterval(() => void this.doRefresh(platform, false), intervalMs)
     this.mechanisms.set(platform, { stop: () => clearInterval(timer) })
   }
 
   private async doRefresh(platform: WatchPlatform, force = false): Promise<void> {
     if (this.busy.has(platform)) {
       if (force) this.pendingForce.add(platform)
+      else this.pendingRefresh.add(platform)
       return
     }
     this.busy.add(platform)
     try {
       const live = await listDevicesOrThrow(platform)
       if (platform !== 'windows') upsertFromLive(live)
-      const devices = mergeList(platform, live)
+      // live 为空且未抛错 = 工具链确认无设备，才合并历史离线；扫描失败会抛错并保留上次列表
+      const confirmedEmpty = platform !== 'windows' && live.length === 0
+      const devices = mergeList(platform, live, confirmedEmpty)
       const snap = snapshot(devices)
       if (force || snap !== this.lastSnapshot.get(platform)) {
         this.lastSnapshot.set(platform, snap)
         this.lastDevices.set(platform, devices)
-        log('devices', `refresh ${platform} count=${devices.length}`)
+        log('devices', `refresh ${platform} live=${live.length} merged=${devices.length}`)
         this.broadcast(platform, devices)
       }
     } catch (err) {
@@ -143,12 +155,13 @@ class DeviceMonitor {
       }
     } finally {
       this.busy.delete(platform)
-      if (this.pendingForce.delete(platform)) {
-        void this.doRefresh(platform, true)
+      const rerunForce = this.pendingForce.delete(platform)
+      const rerunNormal = this.pendingRefresh.delete(platform)
+      if (rerunForce || rerunNormal) {
+        void this.doRefresh(platform, rerunForce)
       }
     }
   }
-
 
   private broadcast(platform: WatchPlatform, devices: DeviceInfo[]): void {
     const set = this.subscribers.get(platform)
@@ -164,3 +177,10 @@ class DeviceMonitor {
 }
 
 export const deviceMonitor = new DeviceMonitor()
+
+/** 应用启动时预热 adb server，避免首次 track 冷启动。 */
+export function initDeviceMonitoring(): void {
+  if (isBundledAdbPresent()) {
+    void ensureAdbServer()
+  }
+}

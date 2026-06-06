@@ -10,6 +10,7 @@ import {
 } from 'fs'
 import { basename, dirname, join } from 'path'
 import type { FileEntry } from './types'
+import { dirCache, makeCacheKey } from './dir-cache'
 
 function assertUnderRoot(root: string, target: string): string {
   const normalizedRoot = join(root).replace(/\\/g, '/').toLowerCase()
@@ -21,6 +22,32 @@ function assertUnderRoot(root: string, target: string): string {
 }
 
 export function listLocalDir(root: string, relativePath = ''): FileEntry[] {
+  const cacheKey = makeCacheKey('local', { root, relativePath })
+
+  // 查缓存
+  const cached = dirCache.getWithFreshness(cacheKey)
+  if (cached) {
+    // 本地文件系统访问极快，陈旧缓存直接后台刷新
+    if (cached.stale) {
+      // 使用 setImmediate 在下一个事件循环中刷新，不阻塞当前返回
+      setImmediate(() => {
+        const fresh = readLocalDirFromDisk(root, relativePath)
+        if (!dirCache.isSameSnapshot(cacheKey, fresh)) {
+          dirCache.set(cacheKey, { entries: fresh })
+        }
+      })
+    }
+    return cached.cached.entries
+  }
+
+  // 缓存未命中，读取并缓存
+  const entries = readLocalDirFromDisk(root, relativePath)
+  dirCache.set(cacheKey, { entries })
+  return entries
+}
+
+/** 从磁盘读取本地目录内容（不含缓存逻辑） */
+function readLocalDirFromDisk(root: string, relativePath: string): FileEntry[] {
   const dir = assertUnderRoot(root, relativePath)
   if (!existsSync(dir)) throw new Error('目录不存在')
   if (!statSync(dir).isDirectory()) throw new Error('不是目录')
@@ -59,17 +86,30 @@ export function writeLocalFile(root: string, relativePath: string, content: stri
   const parent = dirname(file)
   if (!existsSync(parent)) mkdirSync(parent, { recursive: true })
   writeFileSync(file, binary ? Buffer.from(content, 'base64') : content, binary ? undefined : 'utf8')
+  invalidateLocalPathCache(root, relativePath)
 }
 
 export function deleteLocalPath(root: string, relativePath: string): void {
   const target = assertUnderRoot(root, relativePath)
   if (!existsSync(target)) throw new Error('路径不存在')
   rmSync(target, { recursive: true, force: true })
+  invalidateLocalPathCache(root, relativePath)
 }
 
 export function mkdirLocal(root: string, relativePath: string): void {
   const dir = assertUnderRoot(root, relativePath)
   mkdirSync(dir, { recursive: true })
+  invalidateLocalPathCache(root, relativePath)
+}
+
+/** 使本地路径的缓存失效（包括当前路径和所有父路径） */
+function invalidateLocalPathCache(root: string, relativePath: string): void {
+  const parts = relativePath.replace(/\\/g, '/').split('/').filter(Boolean)
+  for (let i = 0; i <= parts.length; i++) {
+    const rel = parts.slice(0, i).join('/')
+    const key = makeCacheKey('local', { root, relativePath: rel })
+    dirCache.invalidate(key)
+  }
 }
 
 export function renameLocal(root: string, fromRel: string, toRel: string): void {
@@ -80,6 +120,8 @@ export function renameLocal(root: string, fromRel: string, toRel: string): void 
   const parent = dirname(to)
   if (!existsSync(parent)) mkdirSync(parent, { recursive: true })
   renameSync(from, to)
+  invalidateLocalPathCache(root, fromRel)
+  invalidateLocalPathCache(root, toRel)
 }
 
 export function localDisplayName(relativePath: string): string {

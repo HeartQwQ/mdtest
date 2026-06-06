@@ -2,58 +2,123 @@
   import {
     ArrowUp,
     ChevronRight,
-    File,
+    File as FileIcon,
     FilePlus,
     Folder,
     FolderPlus,
+    HardDrive,
     Home,
+    Package,
     RefreshCw,
-    Save,
     Trash2,
     Upload
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { Input } from '$lib/components/ui/input'
   import { cn } from '$lib/utils'
-  import { filesApi, type FileEntry } from '../files'
+  import { filesApi, type DeviceFsPlatform, type FileEntry } from '../files'
 
   let {
     mode,
     root,
     mobilePlatform,
+    devicePlatform,
     deviceId,
-    packageId
+    packageId,
+    fileMode: fileModeProp
   }: {
-    mode: 'local' | 'mobile'
+    mode: 'local' | 'mobile' | 'device'
     root: string
-    mobilePlatform?: 'android' | 'harmony'
+    mobilePlatform?: DeviceFsPlatform
+    devicePlatform?: DeviceFsPlatform
     deviceId?: string
     packageId?: string
+    /** 移动端文件视图模式：'app'=应用包目录（默认），'root'=设备根目录 */
+    fileMode?: 'app' | 'root'
   } = $props()
+
+  /** 当前实际文件浏览模式（仅移动端有效） */
+  let activeFileMode = $state<'app' | 'root'>('app')
+
+  /** 当前活跃的应用包ID（安卓应用包模式下动态追踪） */
+  let activePackageId = $state<string | undefined>(packageId)
 
   let cwd = $state('')
   let entries = $state<FileEntry[]>([])
   let dataRoot = $state('')
+  let storageHint = $state<string | null>(null)
   let loading = $state(false)
+  let refreshing = $state(false)
   let error = $state<string | null>(null)
   let selectedPath = $state('')
-  let editorContent = $state('')
-  let editorBinary = $state(false)
-  let editorDirty = $state(false)
   let newName = $state('')
+  let lastInitKey = ''
 
   const breadcrumbs = $derived(cwd ? cwd.split(/[/\\]/).filter(Boolean) : [])
+  const visibleEntries = $derived(entries)
+  /** 当前实际生效的浏览模式 */
+  const effectiveMode = $derived.by(() => {
+    if (mode === 'local') return 'local'
+    // 移动端：根据activeFileMode决定实际模式
+    if (mode === 'mobile' || mode === 'device') {
+      if (activeFileMode === 'root') return 'device'
+      return 'mobile'
+    }
+    return mode
+  })
 
-  async function loadDir(path = cwd): Promise<void> {
-    loading = true
+  const contextKey = $derived.by(() =>
+    [effectiveMode, root, mobilePlatform ?? '', devicePlatform ?? '', deviceId ?? '', activePackageId ?? '', activeFileMode].join('|')
+  )
+
+  /** 构建当前上下文的缓存失效参数 */
+  function getCacheOpts(path: string) {
+    if (effectiveMode === 'local') return { mode: 'local' as const, opts: { root, relativePath: path } }
+    if (effectiveMode === 'device' && (devicePlatform || mobilePlatform) && deviceId) {
+      return { mode: 'device' as const, opts: { platform: (devicePlatform ?? mobilePlatform!) as DeviceFsPlatform, deviceId, relativePath: path } }
+    }
+    if (effectiveMode === 'mobile' && mobilePlatform && deviceId && activePackageId) {
+      return { mode: 'mobile' as const, opts: { platform: mobilePlatform, deviceId, packageId: activePackageId, relativePath: path } }
+    }
+    return null
+  }
+
+  async function loadDir(path = cwd, forceRefresh = false): Promise<void> {
+    // 手动刷新时先使缓存失效
+    if (forceRefresh) {
+      const cacheOpts = getCacheOpts(path)
+      if (cacheOpts) await filesApi.cacheInvalidate(cacheOpts.mode, cacheOpts.opts)
+    }
+
+    // 首次加载（无已有数据）时显示loading，缓存命中时瞬时展示不闪烁
+    const hasData = entries.length > 0 || cwd !== ''
+    if (!hasData || forceRefresh) loading = true
+    if (forceRefresh) refreshing = true
     error = null
     try {
-      if (mode === 'local') {
+      if (effectiveMode === 'local') {
         entries = await filesApi.listLocal(root, path)
-      } else if (mobilePlatform && deviceId && packageId) {
-        const res = await filesApi.listMobile(mobilePlatform, deviceId, packageId, path)
+      } else if (effectiveMode === 'device' && (devicePlatform || mobilePlatform) && deviceId) {
+        const plat = (devicePlatform ?? mobilePlatform!) as DeviceFsPlatform
+        const res = await filesApi.listDevice(plat, deviceId, path)
         dataRoot = res.root
+        storageHint = res.hint ?? null
         entries = res.entries
+      } else if (effectiveMode === 'mobile' && mobilePlatform && deviceId) {
+        // 安卓应用包模式下不需要 activePackageId 即可列出 /storage/emulated/0/Android/data 目录
+        // 当用户进入某个具体应用包子目录后，该子目录名会成为新的 activePackageId
+        // 非安卓平台（鸿蒙）必须提供 packageId，安卓允许空字符串
+        const effectivePkgId = mobilePlatform === 'android'
+          ? (activePackageId ?? '')
+          : (activePackageId ?? '')
+        if (effectivePkgId !== '' || mobilePlatform === 'android') {
+          const res = await filesApi.listApp(mobilePlatform, deviceId, effectivePkgId, path)
+          dataRoot = res.root
+          storageHint = res.hint ?? null
+          entries = res.entries
+        } else {
+          entries = []
+        }
       } else {
         entries = []
       }
@@ -63,82 +128,58 @@
       entries = []
     } finally {
       loading = false
+      refreshing = false
     }
   }
 
-  async function openEntry(ent: FileEntry): Promise<void> {
-    if (ent.isDirectory) {
-      const next = cwd ? `${cwd}/${ent.name}` : ent.name
-      await loadDir(next)
-      selectedPath = ''
-      editorContent = ''
-      editorDirty = false
-      return
-    }
+  function resolveEntryPath(ent: FileEntry): string {
+    return ent.path || (cwd ? `${cwd}/${ent.name}` : ent.name)
+  }
 
-    selectedPath = cwd ? `${cwd}/${ent.name}` : ent.name
-    try {
-      if (mode === 'local') {
-        const r = await filesApi.readLocal(root, selectedPath)
-        editorContent = r.text
-        editorBinary = r.binary
-      } else if (mobilePlatform && deviceId && packageId) {
-        const r = await filesApi.readMobile(mobilePlatform, deviceId, packageId, selectedPath)
-        editorContent = r.binary
-          ? `[二进制 base64，前 2000 字符]\n${r.text.slice(0, 2000)}`
-          : r.text
-        editorBinary = r.binary
-      }
-      editorDirty = false
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e)
+  async function openEntry(ent: FileEntry): Promise<void> {
+    const next = resolveEntryPath(ent)
+    selectedPath = next
+    if (!ent.isDirectory) return
+    // 安卓应用包模式下：进入子目录时，将该子目录名设为新的 activePackageId
+    if (effectiveMode === 'mobile' && mobilePlatform === 'android' && ent.isDirectory) {
+      activePackageId = ent.name
     }
+    await loadDir(next)
   }
 
   async function goUp(): Promise<void> {
     if (!cwd) return
     const parts = cwd.split(/[/\\]/).filter(Boolean)
     parts.pop()
+    selectedPath = ''
     await loadDir(parts.join('/'))
   }
 
   async function goRoot(): Promise<void> {
+    selectedPath = ''
+    storageHint = null
     await loadDir('')
   }
 
-  async function saveFile(): Promise<void> {
-    if (!selectedPath) return
-    try {
-      if (mode === 'local') {
-        await filesApi.writeLocal(root, selectedPath, editorContent, editorBinary)
-      } else if (mobilePlatform && deviceId && packageId) {
-        await filesApi.writeMobile(
-          mobilePlatform,
-          deviceId,
-          packageId,
-          selectedPath,
-          editorContent,
-          editorBinary
-        )
-      }
-      editorDirty = false
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e)
-    }
+  async function goBreadcrumb(index: number): Promise<void> {
+    const target = breadcrumbs.slice(0, index + 1).join('/')
+    selectedPath = ''
+    await loadDir(target)
   }
 
   async function deleteSelected(): Promise<void> {
     const rel = selectedPath || cwd
-    if (!rel && !cwd) return
+    if (!rel) return
     if (!confirm(`确定删除「${rel || '当前目录'}」？`)) return
     try {
-      if (mode === 'local') {
+      if (effectiveMode === 'local') {
         await filesApi.deleteLocal(root, rel)
-      } else if (mobilePlatform && deviceId && packageId) {
-        await filesApi.deleteMobile(mobilePlatform, deviceId, packageId, rel)
+      } else if (effectiveMode === 'device' && (devicePlatform || mobilePlatform) && deviceId) {
+        await filesApi.deleteDevice((devicePlatform ?? mobilePlatform!) as DeviceFsPlatform, deviceId, rel)
+      } else if (effectiveMode === 'mobile' && mobilePlatform && deviceId && activePackageId) {
+        await filesApi.deleteApp(mobilePlatform, deviceId, activePackageId, rel)
       }
       selectedPath = ''
-      editorContent = ''
       await loadDir(cwd)
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
@@ -150,9 +191,11 @@
     if (!name) return
     const rel = cwd ? `${cwd}/${name}` : name
     try {
-      if (mode === 'local') await filesApi.mkdirLocal(root, rel)
-      else if (mobilePlatform && deviceId && packageId) {
-        await filesApi.mkdirMobile(mobilePlatform, deviceId, packageId, rel)
+      if (effectiveMode === 'local') await filesApi.mkdirLocal(root, rel)
+      else if (effectiveMode === 'device' && (devicePlatform || mobilePlatform) && deviceId) {
+        await filesApi.mkdirDevice((devicePlatform ?? mobilePlatform!) as DeviceFsPlatform, deviceId, rel)
+      } else if (effectiveMode === 'mobile' && mobilePlatform && deviceId && activePackageId) {
+        await filesApi.mkdirApp(mobilePlatform, deviceId, activePackageId, rel)
       }
       newName = ''
       await loadDir(cwd)
@@ -166,9 +209,11 @@
     if (!name) return
     const rel = cwd ? `${cwd}/${name}` : name
     try {
-      if (mode === 'local') await filesApi.writeLocal(root, rel, '', false)
-      else if (mobilePlatform && deviceId && packageId) {
-        await filesApi.writeMobile(mobilePlatform, deviceId, packageId, rel, '', false)
+      if (effectiveMode === 'local') await filesApi.writeLocal(root, rel, '', false)
+      else if (effectiveMode === 'device' && (devicePlatform || mobilePlatform) && deviceId) {
+        await filesApi.writeDevice((devicePlatform ?? mobilePlatform!) as DeviceFsPlatform, deviceId, rel, '', false)
+      } else if (effectiveMode === 'mobile' && mobilePlatform && deviceId && activePackageId) {
+        await filesApi.writeApp(mobilePlatform, deviceId, activePackageId, rel, '', false)
       }
       newName = ''
       await loadDir(cwd)
@@ -182,33 +227,55 @@
     if (!picked) return
     const rel = cwd ? `${cwd}/${picked.name}` : picked.name
     try {
-      if (mode === 'local') {
+      if (effectiveMode === 'local') {
         await filesApi.writeLocal(root, rel, picked.content, picked.binary)
-      } else if (mobilePlatform && deviceId && packageId) {
-        await filesApi.writeMobile(
+      } else if (effectiveMode === 'device' && (devicePlatform || mobilePlatform) && deviceId) {
+        await filesApi.writeDevice(
+          (devicePlatform ?? mobilePlatform!) as DeviceFsPlatform,
+          deviceId,
+          rel,
+          picked.content,
+          picked.binary
+        )
+      } else if (effectiveMode === 'mobile' && mobilePlatform && deviceId && activePackageId) {
+        await filesApi.writeApp(
           mobilePlatform,
           deviceId,
-          packageId,
+          activePackageId,
           rel,
           picked.content,
           picked.binary
         )
       }
-      await loadDir(cwd)
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
     }
   }
 
+  /** 切换文件浏览模式（应用包/根目录） */
+  function switchFileMode(newMode: 'app' | 'root') {
+    if (activeFileMode === newMode) return
+    activeFileMode = newMode
+  }
+
   $effect(() => {
-    void root
-    void mode
-    void mobilePlatform
-    void deviceId
-    void packageId
+    // 同步外部fileModeProp变化
+    if (fileModeProp) {
+      activeFileMode = fileModeProp
+    }
+  })
+
+  $effect(() => {
+    const key = contextKey
+    if (key === lastInitKey) return
+    lastInitKey = key
+    // 立即清空旧数据，防止切换端/设备时串目录
+    entries = []
     cwd = ''
+    dataRoot = ''
+    storageHint = null
     selectedPath = ''
-    editorContent = ''
+    error = null
     void loadDir('')
   })
 </script>
@@ -238,87 +305,130 @@
     >
       <Trash2 class="size-4" />
     </Button>
+    {#if mode !== 'local'}
+      <!-- 应用包/根目录切换 -->
+      <div class="flex items-center gap-0.5 rounded-md bg-muted/50 p-0.5">
+        <button
+          type="button"
+          class={cn(
+            'flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium transition-colors',
+            activeFileMode === 'app'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+          onclick={() => switchFileMode('app')}
+          disabled={mobilePlatform !== 'android' && !activePackageId}
+          title="应用包目录"
+        >
+          <Package class="size-3" strokeWidth={1.75} />
+          <span>应用包</span>
+        </button>
+        <button
+          type="button"
+          class={cn(
+            'flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium transition-colors',
+            activeFileMode === 'root'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+          onclick={() => switchFileMode('root')}
+          title="设备根目录"
+        >
+          <HardDrive class="size-3" strokeWidth={1.75} />
+          <span>根目录</span>
+        </button>
+      </div>
+    {/if}
     <div class="flex min-w-0 flex-1 items-center gap-0.5 truncate px-1 font-mono text-[11px] text-muted-foreground">
-      {#if mode === 'mobile' && dataRoot}
-        <span class="truncate" title={dataRoot}>{dataRoot}</span>
-      {:else if mode === 'local'}
-        <span class="truncate" title={root}>{root}</span>
+      {#if effectiveMode === 'mobile' && dataRoot}
+        <button
+          type="button"
+          class="truncate underline-offset-2 hover:underline"
+          onclick={goRoot}
+          title={dataRoot}
+          aria-label="回到根目录"
+        >
+          {dataRoot}
+        </button>
+      {:else if effectiveMode === 'device' && dataRoot}
+        <button
+          type="button"
+          class="truncate underline-offset-2 hover:underline"
+          onclick={goRoot}
+          title={dataRoot}
+          aria-label="回到根目录"
+        >
+          {dataRoot}
+        </button>
+      {:else if effectiveMode === 'local'}
+        <button
+          type="button"
+          class="truncate underline-offset-2 hover:underline"
+          onclick={goRoot}
+          title={root}
+          aria-label="回到根目录"
+        >
+          {root.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? root}
+        </button>
       {/if}
       {#each breadcrumbs as part, i (i)}
         <ChevronRight class="size-3 shrink-0 opacity-50" />
-        <span class="truncate">{part}</span>
+        <button
+          type="button"
+          class="truncate underline-offset-2 hover:underline"
+          onclick={() => goBreadcrumb(i)}
+          aria-label={`跳转到 ${part}`}
+        >
+          {part}
+        </button>
       {/each}
     </div>
   </div>
 
   {#if error}
     <p class="border-b border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>
+  {:else if storageHint}
+    <p class="border-b border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">{storageHint}</p>
   {/if}
 
-  <div class="grid min-h-[220px] flex-1 grid-cols-1 md:grid-cols-2">
-    <div class="flex min-h-0 flex-col border-border md:border-r">
-      <div class="flex flex-wrap gap-1 border-b border-border p-2">
-        <Input bind:value={newName} placeholder="新建名称" class="min-w-[100px] flex-1 text-xs" />
-        <Button variant="outline" size="sm" onclick={createFile}>
-          <FilePlus class="size-3" /> 文件
-        </Button>
-        <Button variant="outline" size="sm" onclick={createFolder}>
-          <FolderPlus class="size-3" /> 文件夹
-        </Button>
-      </div>
-      <ul class="flex-1 overflow-auto p-1">
-        {#if loading}
-          <li class="px-3 py-6 text-center text-xs text-muted-foreground">加载中…</li>
-        {:else if entries.length === 0}
-          <li class="px-3 py-6 text-center text-xs text-muted-foreground">空目录</li>
-        {:else}
-          {#each entries as ent (ent.path)}
-            <li>
-              <button
-                type="button"
-                class={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
-                  selectedPath === ent.path
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
-                )}
-                onclick={() => openEntry(ent)}
-              >
-                {#if ent.isDirectory}
-                  <Folder class="size-4 shrink-0 text-primary" strokeWidth={1.75} />
-                {:else}
-                  <File class="size-4 shrink-0 opacity-60" strokeWidth={1.75} />
-                {/if}
-                <span class="min-w-0 flex-1 truncate">{ent.name}</span>
-                {#if ent.size != null && !ent.isDirectory}
-                  <span class="shrink-0 font-mono text-[10px] opacity-60">{ent.size} B</span>
-                {/if}
-              </button>
-            </li>
-          {/each}
-        {/if}
-      </ul>
+  <div class="flex min-h-[220px] flex-1 flex-col">
+    <div class="flex flex-wrap gap-1 border-b border-border p-2">
+      <Input bind:value={newName} placeholder="新建名称" class="min-w-[100px] flex-1 text-xs" />
+      <Button variant="outline" size="sm" onclick={createFile}>
+        <FilePlus class="size-3" /> 文件
+      </Button>
+      <Button variant="outline" size="sm" onclick={createFolder}>
+        <FolderPlus class="size-3" /> 文件夹
+      </Button>
     </div>
-
-    <div class="flex min-h-0 flex-col">
-      {#if selectedPath}
-        <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-          <span class="min-w-0 truncate font-mono text-xs text-muted-foreground">{selectedPath}</span>
-          <Button size="sm" onclick={saveFile}>
-            <Save class="size-3" />
-            保存
-          </Button>
-        </div>
-        <textarea
-          bind:value={editorContent}
-          oninput={() => (editorDirty = true)}
-          readonly={editorBinary}
-          class="min-h-[180px] flex-1 resize-y border-0 bg-muted/20 p-3 font-mono text-xs focus:outline-none"
-          placeholder="选择文件以编辑"
-        ></textarea>
+    <ul class="flex-1 overflow-auto p-1">
+      {#if loading}
+        <li class="px-3 py-6 text-center text-xs text-muted-foreground">加载中…</li>
+      {:else if visibleEntries.length === 0}
+        <li class="px-3 py-6 text-center text-xs text-muted-foreground">空目录</li>
       {:else}
-        <p class="flex flex-1 items-center justify-center p-6 text-xs text-muted-foreground">选择文件查看或编辑</p>
+        {#each visibleEntries as ent (resolveEntryPath(ent))}
+          <li>
+            <button
+              type="button"
+              class={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
+                selectedPath === resolveEntryPath(ent)
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+              )}
+              onclick={() => openEntry(ent)}
+            >
+              {#if ent.isDirectory}
+                <Folder class="size-4 shrink-0 text-primary" strokeWidth={1.75} />
+              {:else}
+                <FileIcon class="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+              {/if}
+              <span class="min-w-0 flex-1 truncate">{ent.name}</span>
+            </button>
+          </li>
+        {/each}
       {/if}
-    </div>
+    </ul>
   </div>
 </div>

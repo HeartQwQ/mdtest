@@ -1,4 +1,4 @@
-export type MobilePlatform = 'android' | 'harmony'
+export type MobilePlatform = 'android' | 'harmony' | 'ios'
 
 /** 从设备上读到的已安装包 */
 export interface InstalledPackage {

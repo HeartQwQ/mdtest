@@ -5,6 +5,7 @@
   import { cn } from '$lib/utils'
   import { ipc, type DeviceInfo } from '../ipc'
   import { statusDotClass } from '../ui/status'
+  import FileExplorer from './FileExplorer.svelte'
   import { reconcileSelectedDevice, watchMobileDevices } from '../devices/watch'
 
   let devices = $state<DeviceInfo[]>([])
@@ -13,13 +14,6 @@
   let error = $state<string | null>(null)
   let toolReady = $state(false)
   let toolPath = $state<string | null>(null)
-
-  const statusLabel: Record<string, string> = {
-    online: '在线',
-    offline: '离线',
-    unauthorized: '未信任',
-    unknown: '未知'
-  }
 
   const detailKeys: { key: string; label: string }[] = [
     { key: 'DeviceName', label: '设备名称' },
@@ -134,11 +128,8 @@
                   )}
                   onclick={() => selectDevice(d)}
                 >
-                  <span class="size-2 shrink-0 rounded-full {statusDotClass(d.status)}"></span>
+                  <span class="size-2 shrink-0 rounded-full {statusDotClass(d.status, d.platform)}"></span>
                   <span class="min-w-0 flex-1 truncate">{d.name}</span>
-                  <span class="shrink-0 text-[10px] text-muted-foreground">
-                    {statusLabel[d.status] ?? d.status}
-                  </span>
                 </button>
               </li>
             {/each}
@@ -156,13 +147,17 @@
           </div>
         {:else}
           <h2 class="text-lg font-semibold tracking-tight">{selected.name}</h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            状态：{statusLabel[selected.status] ?? selected.status}
-          </p>
 
           {#if selected.status === 'unauthorized'}
             <div class="mt-4 rounded-lg border border-warn/30 bg-warn/10 px-4 py-3 text-sm">
               请在 iPhone 上解锁屏幕，弹出「信任此电脑」时点信任，信任后将自动上线。
+            </div>
+          {:else if selected.status === 'online'}
+            <div class="mt-6 min-h-0 flex-1">
+              <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                设备存储
+              </h3>
+              <FileExplorer mode="device" root="" devicePlatform="ios" deviceId={selected.id} />
             </div>
           {/if}
 

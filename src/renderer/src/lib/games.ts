@@ -1,4 +1,4 @@
-export type MobilePlatform = 'android' | 'harmony'
+export type MobilePlatform = 'android' | 'harmony' | 'ios'
 
 export interface InstalledPackage {
   applicationId: string
