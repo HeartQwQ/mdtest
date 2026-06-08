@@ -22,6 +22,17 @@ function deviceName(details: Record<string, string>, udid: string): string {
   )
 }
 
+function isEmptyDeviceListError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('no device found') ||
+    lower.includes('unable to retrieve device list') ||
+    lower.includes('no device connected') ||
+    lower.includes('could not connect to lockdownd') ||
+    lower.includes('usbmux')
+  )
+}
+
 async function fetchDeviceInfo(udid: string): Promise<{
   status: DeviceStatus
   details: Record<string, string>
@@ -69,7 +80,7 @@ export const iosAdapter: DeviceAdapter = {
       stdout = await runIdevice('idevice_id', ['-l'])
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      if (message.toLowerCase().includes('no device found')) return []
+      if (isEmptyDeviceListError(message)) return []
       throw err
     }
 

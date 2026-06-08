@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { randomUUID } from 'crypto'
 import { app } from 'electron'
 import type { MobilePlatform } from '../games/types'
 import { runAdb } from '../devices/adb-path'
@@ -12,6 +13,10 @@ function tempDir(): string {
   const dir = join(app.getPath('userData'), 'file-transfer-temp')
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+function tempFile(prefix: string): string {
+  return join(tempDir(), `${prefix}-${randomUUID()}`)
 }
 
 function joinRemote(root: string, relative: string): string {
@@ -103,18 +108,21 @@ export async function readMobileFile(
 ): Promise<{ text: string; binary: boolean }> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
   const remote = joinRemote(root, relativePath)
-  const localTmp = join(tempDir(), `read-${Date.now()}`)
+  const localTmp = tempFile('read')
 
-  if (platform === 'android') {
-    await runAdb(['-s', deviceId, 'pull', remote, localTmp])
-  } else {
-    await runHdc(['-t', deviceId, 'file', 'recv', remote, localTmp])
+  try {
+    if (platform === 'android') {
+      await runAdb(['-s', deviceId, 'pull', remote, localTmp])
+    } else {
+      await runHdc(['-t', deviceId, 'file', 'recv', remote, localTmp])
+    }
+
+    const buf = readFileSync(localTmp)
+    const binary = buf.includes(0)
+    return { text: binary ? buf.toString('base64') : buf.toString('utf8'), binary }
+  } finally {
+    rmSync(localTmp, { force: true })
   }
-
-  const buf = readFileSync(localTmp)
-  rmSync(localTmp, { force: true })
-  const binary = buf.includes(0)
-  return { text: binary ? buf.toString('base64') : buf.toString('utf8'), binary }
 }
 
 export async function writeMobileFile(
@@ -128,17 +136,21 @@ export async function writeMobileFile(
 ): Promise<void> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
   const remote = joinRemote(root, relativePath)
-  const localTmp = join(tempDir(), `write-${Date.now()}`)
-  writeFileSync(localTmp, binary ? Buffer.from(content, 'base64') : content)
+  const localTmp = tempFile('write')
 
-  if (platform === 'android') {
-    const parent = remote.replace(/\/[^/]+$/, '')
-    await runAdb(['-s', deviceId, 'shell', 'mkdir', '-p', shellQuote(parent)])
-    await runAdb(['-s', deviceId, 'push', localTmp, remote])
-  } else {
-    await runHdc(['-t', deviceId, 'file', 'send', localTmp, remote])
+  try {
+    writeFileSync(localTmp, binary ? Buffer.from(content, 'base64') : content)
+
+    if (platform === 'android') {
+      const parent = remote.replace(/\/[^/]+$/, '')
+      await runAdb(['-s', deviceId, 'shell', 'mkdir', '-p', shellQuote(parent)])
+      await runAdb(['-s', deviceId, 'push', localTmp, remote])
+    } else {
+      await runHdc(['-t', deviceId, 'file', 'send', localTmp, remote])
+    }
+  } finally {
+    rmSync(localTmp, { force: true })
   }
-  rmSync(localTmp, { force: true })
 }
 
 export async function deleteMobilePath(

@@ -52,7 +52,7 @@
 - **Dark & Premium 开发者工具风**：克制、信息密度高、primary/cyan 作单一强调。
 - **窗口**：无边框（`frame: false`）+ 自绘 `Titlebar`（`-webkit-app-region: drag`）。
 - **主导航**：icon 侧栏 `w-14`，hover tooltip；顶/底占位区复刻 tauri 视觉。
-- **设备管理页**：左设备区 `w-64` · 中投屏/文件 · 右日志/AI `w-72`；最小窗口 960×640。
+- **环境管理页**：左端入口/设备区 `w-64` · 中 Android 投屏/画面控制 + 文件工作台/环境模板 · 右操作记录/知识/AI `w-72`；最小窗口 960×640。
 - **四端顺序与图标**：**PC → 安卓 → iOS → 鸿蒙**；手机三端统一 `Smartphone`，PC 用 `Monitor`。
 - 圆角 `rounded-lg` / `rounded-xl`；面板用 `bg-card border-border`。
 - 优先 shadcn 组件，避免硬编码 `zinc-*` / `cyan-*`。
@@ -73,4 +73,4 @@ pnpm dlx shadcn-svelte@latest add <component...>
 ## 6. 流程与边界
 
 - 处于 **Superpowers** 链路的「设计 / 实现 UI」环节，不跳过 verification。
-- 柚爱**不碰**：Electron 主进程、adb/hdc、设备扫描、文件传输协议、游戏启动逻辑（归主代理）。
+- 柚爱**不碰**：Electron 主进程、adb/hdc、设备扫描、文件传输协议、游戏启动逻辑（归主代理）；但 UI 设计需优先服务 Android-first 的和平精英环境管理 + 投屏/画面控制闭环。

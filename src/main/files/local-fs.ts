@@ -8,17 +8,25 @@ import {
   statSync,
   writeFileSync
 } from 'fs'
-import { basename, dirname, join } from 'path'
+import { basename, dirname, isAbsolute, join, relative as pathRelative, resolve, sep } from 'path'
 import type { FileEntry } from './types'
 import { dirCache, makeCacheKey } from './dir-cache'
 
 function assertUnderRoot(root: string, target: string): string {
-  const normalizedRoot = join(root).replace(/\\/g, '/').toLowerCase()
-  const normalizedTarget = join(root, target).replace(/\\/g, '/').toLowerCase()
-  if (!normalizedTarget.startsWith(normalizedRoot)) {
+  const resolvedRoot = resolve(root)
+  const resolvedTarget = resolve(resolvedRoot, target)
+  const rel = pathRelative(resolvedRoot, resolvedTarget)
+
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     throw new Error('路径越界')
   }
-  return join(root, target)
+  return resolvedTarget
+}
+
+function assertNotRoot(relativePath: string, action: string): void {
+  if (!relativePath.trim() || relativePath.trim() === '.') {
+    throw new Error(`不能${action}根目录`)
+  }
 }
 
 export function listLocalDir(root: string, relativePath = ''): FileEntry[] {
@@ -90,6 +98,7 @@ export function writeLocalFile(root: string, relativePath: string, content: stri
 }
 
 export function deleteLocalPath(root: string, relativePath: string): void {
+  assertNotRoot(relativePath, '删除')
   const target = assertUnderRoot(root, relativePath)
   if (!existsSync(target)) throw new Error('路径不存在')
   rmSync(target, { recursive: true, force: true })
@@ -113,6 +122,8 @@ function invalidateLocalPathCache(root: string, relativePath: string): void {
 }
 
 export function renameLocal(root: string, fromRel: string, toRel: string): void {
+  assertNotRoot(fromRel, '重命名')
+  assertNotRoot(toRel, '重命名为')
   const from = assertUnderRoot(root, fromRel)
   const to = assertUnderRoot(root, toRel)
   if (!existsSync(from)) throw new Error('源路径不存在')

@@ -15,6 +15,19 @@ const api = {
   idevicePath: () => ipcRenderer.invoke('devices:idevicePath'),
   bundledIdevice: () => ipcRenderer.invoke('devices:bundledIdevice'),
 
+  androidScreenSize: (deviceId: string) => ipcRenderer.invoke('android:screenSize', deviceId),
+  androidScreenshot: (deviceId: string) => ipcRenderer.invoke('android:screenshot', deviceId),
+  androidTap: (deviceId: string, x: number, y: number) =>
+    ipcRenderer.invoke('android:tap', deviceId, x, y),
+  androidSwipe: (
+    deviceId: string,
+    opts: { x1: number; y1: number; x2: number; y2: number; durationMs?: number }
+  ) => ipcRenderer.invoke('android:swipe', deviceId, opts),
+  androidKeyevent: (deviceId: string, keyCode: number | string) =>
+    ipcRenderer.invoke('android:keyevent', deviceId, keyCode),
+  androidInputText: (deviceId: string, text: string) =>
+    ipcRenderer.invoke('android:inputText', deviceId, text),
+
   startDeviceWatch: (platform: string) => ipcRenderer.invoke('devices:startWatch', platform),
   stopDeviceWatch: (platform: string) => ipcRenderer.invoke('devices:stopWatch', platform),
   removeDevice: (platform: string, deviceId: string) =>
@@ -100,6 +113,8 @@ const api = {
   filesDeviceMkdir: (platform: string, deviceId: string, relativePath: string) =>
     ipcRenderer.invoke('files:device:mkdir', platform, deviceId, relativePath),
   filesPickLocalFile: () => ipcRenderer.invoke('files:pickLocalFile'),
+  filesSaveLocalFile: (defaultName: string, content: string, binary?: boolean) =>
+    ipcRenderer.invoke('files:saveLocalFile', defaultName, content, binary),
 
   filesAppList: (platform: string, deviceId: string, packageId: string, relativePath?: string) =>
     ipcRenderer.invoke('files:app:list', platform, deviceId, packageId, relativePath),

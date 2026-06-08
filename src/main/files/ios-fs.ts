@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { randomUUID } from 'crypto'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { app } from 'electron'
@@ -12,6 +13,10 @@ function tempDir(): string {
   const dir = join(app.getPath('userData'), 'file-transfer-temp')
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+function tempFile(prefix: string): string {
+  return join(tempDir(), `${prefix}-${randomUUID()}`)
 }
 
 function stripAnsi(text: string): string {
@@ -168,12 +173,15 @@ export async function readIosFile(
   root = '/'
 ): Promise<{ text: string; binary: boolean }> {
   const remote = joinAfcPath(root, relativePath)
-  const localTmp = join(tempDir(), `ios-read-${Date.now()}`)
-  await runAfc(deviceId, ['get', remote, localTmp])
-  const buf = readFileSync(localTmp)
-  rmSync(localTmp, { force: true })
-  const binary = buf.includes(0)
-  return { text: binary ? buf.toString('base64') : buf.toString('utf8'), binary }
+  const localTmp = tempFile('ios-read')
+  try {
+    await runAfc(deviceId, ['get', remote, localTmp])
+    const buf = readFileSync(localTmp)
+    const binary = buf.includes(0)
+    return { text: binary ? buf.toString('base64') : buf.toString('utf8'), binary }
+  } finally {
+    rmSync(localTmp, { force: true })
+  }
 }
 
 export async function writeIosFile(
@@ -184,20 +192,24 @@ export async function writeIosFile(
   root = '/'
 ): Promise<void> {
   const remote = joinAfcPath(root, relativePath)
-  const localTmp = join(tempDir(), `ios-write-${Date.now()}`)
-  writeFileSync(localTmp, binary ? Buffer.from(content, 'base64') : content)
+  const localTmp = tempFile('ios-write')
 
-  const parent = remote.includes('/') ? remote.replace(/\/[^/]+$/, '') : ''
-  if (parent) {
-    try {
-      await runAfc(deviceId, ['mkdir', parent])
-    } catch {
-      /* 父目录可能已存在 */
+  try {
+    writeFileSync(localTmp, binary ? Buffer.from(content, 'base64') : content)
+
+    const parent = remote.includes('/') ? remote.replace(/\/[^/]+$/, '') : ''
+    if (parent) {
+      try {
+        await runAfc(deviceId, ['mkdir', parent])
+      } catch {
+        /* 父目录可能已存在 */
+      }
     }
-  }
 
-  await runAfc(deviceId, ['put', localTmp, remote])
-  rmSync(localTmp, { force: true })
+    await runAfc(deviceId, ['put', localTmp, remote])
+  } finally {
+    rmSync(localTmp, { force: true })
+  }
 }
 
 export async function deleteIosPath(
@@ -301,12 +313,15 @@ export async function readIosAppFile(
   relativePath: string
 ): Promise<{ text: string; binary: boolean }> {
   const remote = joinAfcPath('/', relativePath)
-  const localTmp = join(tempDir(), `ios-app-read-${Date.now()}`)
-  await runAfc(deviceId, ['get', remote, localTmp], bundleId)
-  const buf = readFileSync(localTmp)
-  rmSync(localTmp, { force: true })
-  const binary = buf.includes(0)
-  return { text: binary ? buf.toString('base64') : buf.toString('utf8'), binary }
+  const localTmp = tempFile('ios-app-read')
+  try {
+    await runAfc(deviceId, ['get', remote, localTmp], bundleId)
+    const buf = readFileSync(localTmp)
+    const binary = buf.includes(0)
+    return { text: binary ? buf.toString('base64') : buf.toString('utf8'), binary }
+  } finally {
+    rmSync(localTmp, { force: true })
+  }
 }
 
 export async function writeIosAppFile(
@@ -317,20 +332,24 @@ export async function writeIosAppFile(
   binary = false
 ): Promise<void> {
   const remote = joinAfcPath('/', relativePath)
-  const localTmp = join(tempDir(), `ios-app-write-${Date.now()}`)
-  writeFileSync(localTmp, binary ? Buffer.from(content, 'base64') : content)
+  const localTmp = tempFile('ios-app-write')
 
-  const parent = remote.includes('/') ? remote.replace(/\/[^/]+$/, '') : ''
-  if (parent) {
-    try {
-      await runAfc(deviceId, ['mkdir', parent], bundleId)
-    } catch {
-      /* 父目录可能已存在 */
+  try {
+    writeFileSync(localTmp, binary ? Buffer.from(content, 'base64') : content)
+
+    const parent = remote.includes('/') ? remote.replace(/\/[^/]+$/, '') : ''
+    if (parent) {
+      try {
+        await runAfc(deviceId, ['mkdir', parent], bundleId)
+      } catch {
+        /* 父目录可能已存在 */
+      }
     }
-  }
 
-  await runAfc(deviceId, ['put', localTmp, remote], bundleId)
-  rmSync(localTmp, { force: true })
+    await runAfc(deviceId, ['put', localTmp, remote], bundleId)
+  } finally {
+    rmSync(localTmp, { force: true })
+  }
 }
 
 export async function deleteIosAppPath(

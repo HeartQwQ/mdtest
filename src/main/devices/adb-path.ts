@@ -48,6 +48,30 @@ async function execAdbBinary(adbPath: string, args: string[]): Promise<string> {
   return stdout
 }
 
+async function execAdbBinaryBuffer(adbPath: string, args: string[]): Promise<Buffer> {
+  const dir = dirname(adbPath)
+  const { stdout, stderr } = await execFileAsync(adbPath, args, {
+    timeout: 20000,
+    cwd: dir,
+    windowsHide: true,
+    env: adbEnv(dir),
+    encoding: 'buffer',
+    maxBuffer: 16 * 1024 * 1024
+  })
+
+  const stderrText = Buffer.isBuffer(stderr) ? stderr.toString('utf8') : String(stderr ?? '')
+  if (stderrText) {
+    const isDaemonNotice = stderrText.split(/\r?\n/).every(
+      (line) => !line.trim() || line.trim().startsWith('*')
+    )
+    if (!isDaemonNotice) {
+      logWarn('adb', `stderr (binary command): ${stderrText.slice(0, 200)}`)
+    }
+  }
+
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? '')
+}
+
 async function findSystemAdb(): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync('where.exe', ['adb'], {
@@ -108,6 +132,10 @@ export async function runAdb(args: string[]): Promise<string> {
 
     return out
   })
+}
+
+export async function runAdbBuffer(args: string[]): Promise<Buffer> {
+  return withAdbLock(async () => execAdbBinaryBuffer(resolveAdbPath(), args))
 }
 
 export async function isAdbAvailable(): Promise<boolean> {

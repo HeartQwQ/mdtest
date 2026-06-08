@@ -27,12 +27,8 @@ import {
 
 export type DeviceFsPlatform = Exclude<DevicePlatform, 'windows'>
 
-const ANDROID_STORAGE_ROOTS = ['/storage/emulated/0', '/sdcard/']
-const HARMONY_STORAGE_ROOTS = [
-  '/storage/media/100/local/files',
-  '/sdcard',
-  '/storage/emulated/0'
-]
+const ANDROID_STORAGE_ROOTS = ['/']
+const HARMONY_STORAGE_ROOTS = ['/']
 
 const IOS_STORAGE_ROOT = '/'
 

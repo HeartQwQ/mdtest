@@ -1,4 +1,4 @@
-export type ViewId = 'home' | 'devices' | 'settings'
+export type ViewId = 'home' | 'devices' | 'svar-files' | 'settings'
 
 export const view = $state({
   current: 'home' as ViewId

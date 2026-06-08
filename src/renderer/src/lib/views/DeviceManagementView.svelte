@@ -3,12 +3,14 @@
     Bot,
     Camera,
     ChevronDown,
+    ChevronRight,
     ChevronUp,
+    CircleDot,
     FolderOpen,
+    Home,
     ListChecks,
     Monitor,
     MonitorPlay,
-    Package,
     Play,
     Plus,
     RefreshCw,
@@ -21,8 +23,6 @@
   import { onMount } from 'svelte'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
   import { Button } from '$lib/components/ui/button'
-  import { Input } from '$lib/components/ui/input'
-  import { ScrollArea } from '$lib/components/ui/scroll-area'
   import { cn } from '$lib/utils'
   import { ipc, type DeviceInfo, type DevicePlatform } from '$lib/ipc'
   import { gamesApi } from '$lib/games'
@@ -59,12 +59,9 @@
   let addingPc = $state(false)
   let scanningPc = $state(false)
   let actionError = $state<string | null>(null)
-
-  // 移动端应用包列表
-  let mobilePackages = $state<{ applicationId: string; label: string }[]>([])
-  let selectedPackageId = $state<string | null>(null)
-  let loadingPackages = $state(false)
-  let packageFilter = $state('')
+  let androidFrame = $state<{ src: string; width?: number; height?: number } | null>(null)
+  let androidScreenLoading = $state(false)
+  let androidControlError = $state<string | null>(null)
 
   const currentDevices = $derived(devicesByPlatform[activeEnd] ?? [])
   const currentLoading = $derived(loadingByPlatform[activeEnd])
@@ -73,11 +70,17 @@
   /** 当前平台的在线设备列表 */
   const onlineDevices = $derived(currentDevices.filter((d) => d.status === 'online'))
 
-  /** 检查设备列表是否有实质变化（id 增减或 status 变化），忽略 details 等不稳定字段 */
+  /** 检查设备列表是否有实质变化，忽略 details 等不稳定字段 */
   function hasMaterialChange(prev: DeviceInfo[], next: DeviceInfo[]): boolean {
     if (prev.length !== next.length) return true
     for (let i = 0; i < prev.length; i++) {
-      if (prev[i].id !== next[i].id || prev[i].status !== next[i].status) return true
+      if (
+        prev[i].id !== next[i].id ||
+        prev[i].status !== next[i].status ||
+        prev[i].name !== next[i].name
+      ) {
+        return true
+      }
     }
     return false
   }
@@ -105,7 +108,6 @@
           void filesApi.cachePreload('local', { root: selected.details.path })
         } else if (selected.platform !== 'windows') {
           void filesApi.cachePreload('device', { platform: selected.platform, deviceId: selected.id })
-          void loadMobilePackages(selected.platform, selected.id)
         }
       }
     } else {
@@ -125,59 +127,88 @@
         void filesApi.cachePreload('local', { root: d.details.path })
       } else if (d.platform !== 'windows') {
         void filesApi.cachePreload('device', { platform: d.platform, deviceId: d.id })
-        // 自动加载应用包列表
-        void loadMobilePackages(d.platform, d.id)
       }
     } else {
-      // 设备离线时清空包列表
-      mobilePackages = []
-      selectedPackageId = null
+      androidFrame = null
     }
   }
 
-  async function loadMobilePackages(platform: string, deviceId: string): Promise<void> {
-    loadingPackages = true
+  async function refreshAndroidFrame(): Promise<void> {
+    if (!selectedDevice || selectedDevice.platform !== 'android' || selectedDevice.status !== 'online') {
+      androidFrame = null
+      return
+    }
+
+    androidScreenLoading = true
+    androidControlError = null
     try {
-      mobilePackages = await gamesApi.listPackages(platform as 'android' | 'harmony', deviceId)
-      // 如果之前选中的包不在新列表中，清空选择
-      if (selectedPackageId && !mobilePackages.some(p => p.applicationId === selectedPackageId)) {
-        selectedPackageId = null
+      const frame = await ipc.androidScreenshot(selectedDevice.id)
+      androidFrame = {
+        src: `data:${frame.mime};base64,${frame.data}`,
+        width: frame.width,
+        height: frame.height
       }
-      // 自动选中第一个包
-      if (!selectedPackageId && mobilePackages.length > 0) {
-        selectedPackageId = mobilePackages[0].applicationId
-      }
-    } catch {
-      mobilePackages = []
+    } catch (e) {
+      androidControlError = e instanceof Error ? e.message : String(e)
+      androidFrame = null
     } finally {
-      loadingPackages = false
+      androidScreenLoading = false
     }
   }
 
-  /** 过滤后的应用包列表 */
-  const filteredPackages = $derived.by(() => {
-    if (!packageFilter.trim()) return mobilePackages
-    const q = packageFilter.trim().toLowerCase()
-    return mobilePackages.filter(p =>
-      p.applicationId.toLowerCase().includes(q) || p.label.toLowerCase().includes(q)
-    )
-  })
+  async function tapAndroidFrame(event: MouseEvent): Promise<void> {
+    if (
+      !selectedDevice ||
+      selectedDevice.platform !== 'android' ||
+      !androidFrame?.width ||
+      !androidFrame.height
+    ) {
+      return
+    }
 
-  /** 切换平台时重置包列表 */
+    const target = event.currentTarget as HTMLButtonElement
+    const rect = target.getBoundingClientRect()
+    const x = ((event.clientX - rect.left) / rect.width) * androidFrame.width
+    const y = ((event.clientY - rect.top) / rect.height) * androidFrame.height
+
+    androidControlError = null
+    try {
+      await ipc.androidTap(selectedDevice.id, x, y)
+      await refreshAndroidFrame()
+    } catch (e) {
+      androidControlError = e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  async function androidKey(keyCode: number | string): Promise<void> {
+    if (!selectedDevice || selectedDevice.platform !== 'android') return
+    androidControlError = null
+    try {
+      await ipc.androidKeyevent(selectedDevice.id, keyCode)
+      await refreshAndroidFrame()
+    } catch (e) {
+      androidControlError = e instanceof Error ? e.message : String(e)
+    }
+  }
+
   $effect(() => {
     const end = activeEnd
-    mobilePackages = []
-    selectedPackageId = null
-    packageFilter = ''
-    // 如果当前已选中在线设备，自动加载包列表
-    const dev = selectedByPlatform[end]
-    if (dev && dev.status === 'online' && dev.platform !== 'windows') {
-      void loadMobilePackages(dev.platform, dev.id)
+    androidFrame = null
+    androidControlError = null
+    void end
+  })
+
+  $effect(() => {
+    const dev = selectedDevice
+    if (activeTab === 'screen' && dev?.platform === 'android' && dev.status === 'online') {
+      void refreshAndroidFrame()
+    } else if (dev?.platform !== 'android') {
+      androidFrame = null
+      androidControlError = null
     }
   })
 
-  async function removeDevice(d: DeviceInfo, event: MouseEvent): Promise<void> {
-    event.stopPropagation()
+  async function removeDevice(d: DeviceInfo): Promise<void> {
     actionError = null
     try {
       const ok = await ipc.removeDevice(d.platform, d.id)
@@ -367,7 +398,7 @@
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item
                   class="flex items-center gap-2 text-destructive focus:text-destructive"
-                  onclick={() => void removeDevice(selectedDevice, new MouseEvent('click'))}
+                  onclick={() => void removeDevice(selectedDevice)}
                 >
                   <Trash2 class="size-3.5" strokeWidth={1.75} />
                   <span class="text-sm">从列表移除</span>
@@ -398,11 +429,68 @@
           </div>
         </div>
       {:else if activeTab === 'screen'}
-        <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-          <MonitorPlay class="size-10 text-muted-foreground/60" strokeWidth={1.25} />
-          <p class="text-sm text-muted-foreground">投屏区域（待接入）</p>
-          <p class="text-xs text-muted-foreground">{selectedDevice.name}</p>
-        </div>
+        {#if selectedDevice.platform === 'android' && selectedDevice.status === 'online'}
+          <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+            <div class="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onclick={refreshAndroidFrame}
+                disabled={androidScreenLoading}
+              >
+                <RefreshCw class={cn('size-3.5', androidScreenLoading && 'animate-spin')} strokeWidth={1.75} />
+                刷新画面
+              </Button>
+              <Button variant="outline" size="sm" onclick={() => androidKey('KEYCODE_HOME')}>
+                <Home class="size-3.5" strokeWidth={1.75} />
+                Home
+              </Button>
+              <Button variant="outline" size="sm" onclick={() => androidKey('KEYCODE_BACK')}>
+                <ChevronRight class="size-3.5 rotate-180" strokeWidth={1.75} />
+                返回
+              </Button>
+            </div>
+
+            {#if androidControlError}
+              <p class="max-w-xl text-center text-xs text-destructive">{androidControlError}</p>
+            {/if}
+
+            <div class="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/30 p-2">
+              {#if androidFrame}
+                <button
+                  type="button"
+                  class="group relative h-full max-h-full max-w-full overflow-hidden rounded-md bg-black outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  style={`aspect-ratio: ${androidFrame.width ?? 9} / ${androidFrame.height ?? 16};`}
+                  onclick={tapAndroidFrame}
+                  aria-label="点击安卓画面"
+                  title="点击画面会映射为 adb input tap"
+                >
+                  <img
+                    src={androidFrame.src}
+                    alt={`${selectedDevice.name} screen`}
+                    class="h-full w-full object-contain"
+                    draggable="false"
+                  />
+                  <span class="pointer-events-none absolute right-2 top-2 hidden items-center gap-1 rounded bg-black/60 px-2 py-1 text-[10px] text-white group-hover:flex">
+                    <CircleDot class="size-3" strokeWidth={2} />
+                    点击模拟触控
+                  </span>
+                </button>
+              {:else}
+                <div class="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+                  <MonitorPlay class="size-10 text-muted-foreground/60" strokeWidth={1.25} />
+                  <p>{androidScreenLoading ? '正在获取画面…' : '暂无截图'}</p>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {:else}
+          <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+            <MonitorPlay class="size-10 text-muted-foreground/60" strokeWidth={1.25} />
+            <p class="text-sm text-muted-foreground">投屏区域（待接入）</p>
+            <p class="text-xs text-muted-foreground">{selectedDevice.name}</p>
+          </div>
+        {/if}
       {:else if selectedDevice.status !== 'online'}
         <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
           <FolderOpen class="size-10 text-muted-foreground/60" strokeWidth={1.25} />
@@ -420,75 +508,12 @@
           </p>
         {/if}
       {:else}
-        <!-- 移动端：应用包目录（默认）+ 可切换到根目录 -->
-        <div class="flex min-h-0 flex-1 flex-col gap-2">
-          <!-- 应用包选择栏 -->
-          <div class="flex items-center gap-2">
-            <div class="relative min-w-0 flex-1">
-              <Input
-                value={packageFilter}
-                onchange={(e) => (packageFilter = e.currentTarget.value)}
-                placeholder={loadingPackages ? '加载应用包列表…' : mobilePackages.length === 0 ? '暂无应用包' : '搜索应用包…'}
-                class="h-7 text-xs"
-                disabled={loadingPackages}
-              />
-            </div>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger
-                class="flex min-w-0 max-w-56 items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs font-medium transition-colors hover:bg-accent/50 outline-none"
-                disabled={loadingPackages || mobilePackages.length === 0}
-              >
-                <Package class="size-3.5 shrink-0" strokeWidth={1.75} />
-                <span class="truncate">{selectedPackageId ?? '选择应用包'}</span>
-                <ChevronDown class="size-3 shrink-0 opacity-60" strokeWidth={2} />
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content class="min-w-64 max-h-72 rounded-lg" align="start" sideOffset={4}>
-                <DropdownMenu.Label class="text-xs text-muted-foreground">
-                  已安装应用 ({filteredPackages.length})
-                </DropdownMenu.Label>
-                <ScrollArea class="max-h-56">
-                  {#each filteredPackages as pkg (pkg.applicationId)}
-                    <DropdownMenu.Item
-                      class={cn(
-                        'flex items-center gap-2',
-                        selectedPackageId === pkg.applicationId && 'bg-accent/50'
-                      )}
-                      onclick={() => (selectedPackageId = pkg.applicationId)}
-                    >
-                      <span class="min-w-0 flex-1 truncate font-mono text-xs">{pkg.applicationId}</span>
-                      {#if pkg.label && pkg.label !== pkg.applicationId}
-                        <span class="shrink-0 text-[10px] text-muted-foreground">{pkg.label}</span>
-                      {/if}
-                    </DropdownMenu.Item>
-                  {/each}
-                </ScrollArea>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-7 text-xs shrink-0"
-              disabled={loadingPackages || !selectedDevice}
-              onclick={() => {
-                if (selectedDevice && selectedDevice.platform !== 'windows') {
-                  void loadMobilePackages(selectedDevice.platform, selectedDevice.id)
-                }
-              }}
-            >
-              <RefreshCw class={cn('size-3', loadingPackages && 'animate-spin')} strokeWidth={1.75} />
-              刷新
-            </Button>
-          </div>
-          <div class="min-h-0 flex-1">
-            <FileExplorer
-              mode="mobile"
-              root=""
-              mobilePlatform={selectedDevice.platform as DeviceFsPlatform}
-              deviceId={selectedDevice.id}
-              packageId={selectedPackageId ?? undefined}
-            />
-          </div>
-        </div>
+        <FileExplorer
+          mode="mobile"
+          root=""
+          mobilePlatform={selectedDevice.platform as DeviceFsPlatform}
+          deviceId={selectedDevice.id}
+        />
       {/if}
     </div>
 

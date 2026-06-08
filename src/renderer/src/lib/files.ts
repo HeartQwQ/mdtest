@@ -97,6 +97,9 @@ export const filesApi = {
   pickLocalFile: () =>
     window.api.filesPickLocalFile() as Promise<{ name: string; content: string; binary: boolean } | null>,
 
+  saveLocalFile: (defaultName: string, content: string, binary?: boolean) =>
+    window.api.filesSaveLocalFile(defaultName, content, binary) as Promise<string | null>,
+
   /** 应用包目录操作（移动三端统一入口，支持安卓/鸿蒙/iOS） */
   listApp: (platform: DeviceFsPlatform, deviceId: string, packageId: string, relativePath?: string) =>
     window.api.filesAppList(platform, deviceId, packageId, relativePath) as Promise<{

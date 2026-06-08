@@ -1,10 +1,18 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
-import { readFileSync } from 'fs'
+import { ipcMain, dialog, BrowserWindow, type SaveDialogOptions } from 'electron'
+import { readFileSync, writeFileSync } from 'fs'
 
 import { log } from './log'
 import { isBundledAdbPresent, resolveAdbPath } from './devices/adb-path'
 import { isBundledHdcPresent, resolveHdcPath } from './devices/hdc-path'
 import { isBundledIdevicePresent, resolveIdeviceToolchainDir } from './devices/idevice-path'
+import {
+  captureAndroidScreen,
+  getAndroidScreenSize,
+  inputTextAndroid,
+  keyeventAndroid,
+  swipeAndroid,
+  tapAndroid
+} from './devices/android-control'
 import { listDevices, platformAvailability } from './devices/manager'
 import { deviceMonitor, initDeviceMonitoring, type WatchPlatform } from './devices/device-monitor'
 import { removeCachedDevice } from './devices/device-registry'
@@ -103,6 +111,30 @@ export function registerIpc(): void {
     }
   })
   ipcMain.handle('devices:bundledIdevice', () => isBundledIdevicePresent())
+
+  ipcMain.handle('android:screenSize', (_e, deviceId: string) =>
+    getAndroidScreenSize(deviceId)
+  )
+  ipcMain.handle('android:screenshot', (_e, deviceId: string) =>
+    captureAndroidScreen(deviceId)
+  )
+  ipcMain.handle('android:tap', (_e, deviceId: string, x: number, y: number) =>
+    tapAndroid(deviceId, x, y)
+  )
+  ipcMain.handle(
+    'android:swipe',
+    (
+      _e,
+      deviceId: string,
+      opts: { x1: number; y1: number; x2: number; y2: number; durationMs?: number }
+    ) => swipeAndroid(deviceId, opts)
+  )
+  ipcMain.handle('android:keyevent', (_e, deviceId: string, keyCode: number | string) =>
+    keyeventAndroid(deviceId, keyCode)
+  )
+  ipcMain.handle('android:inputText', (_e, deviceId: string, text: string) =>
+    inputTextAndroid(deviceId, text)
+  )
 
   ipcMain.handle('devices:startWatch', (event, platform: WatchPlatform) => {
     deviceMonitor.start(platform, event.sender)
@@ -298,6 +330,29 @@ export function registerIpc(): void {
       binary
     }
   })
+
+  ipcMain.handle(
+    'files:saveLocalFile',
+    async (event, defaultName: string, content: string, binary?: boolean) => {
+      const safeDefaultName =
+        defaultName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim() || 'download'
+      const saveOptions: SaveDialogOptions = {
+        defaultPath: safeDefaultName,
+        properties: ['showOverwriteConfirmation']
+      }
+      const parentWindow = BrowserWindow.fromWebContents(event.sender)
+      const result = parentWindow
+        ? await dialog.showSaveDialog(parentWindow, saveOptions)
+        : await dialog.showSaveDialog(saveOptions)
+      if (result.canceled || !result.filePath) return null
+      if (binary) {
+        writeFileSync(result.filePath, Buffer.from(content, 'base64'))
+      } else {
+        writeFileSync(result.filePath, content, 'utf8')
+      }
+      return result.filePath
+    }
+  )
 
   // ---- 目录缓存 IPC ----
 

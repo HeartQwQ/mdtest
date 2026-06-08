@@ -53,6 +53,7 @@ class DeviceMonitor {
   private busy = new Set<WatchPlatform>()
   private pendingRefresh = new Set<WatchPlatform>()
   private pendingForce = new Set<WatchPlatform>()
+  private lastErrorLog = new Map<WatchPlatform, { signature: string; at: number }>()
   /** 同一 WebContents 订阅多端时只注册一次 destroyed，避免 MaxListenersExceededWarning。 */
   private destroyBound = new WeakSet<WebContents>()
 
@@ -135,6 +136,7 @@ class DeviceMonitor {
     this.busy.add(platform)
     try {
       const live = await listDevicesOrThrow(platform)
+      this.lastErrorLog.delete(platform)
       if (platform !== 'windows') upsertFromLive(live)
       // live 为空且未抛错 = 工具链确认无设备，才合并历史离线；扫描失败会抛错并保留上次列表
       const confirmedEmpty = platform !== 'windows' && live.length === 0
@@ -147,7 +149,7 @@ class DeviceMonitor {
         this.broadcast(platform, devices)
       }
     } catch (err) {
-      logWarn('devices', `refresh ${platform} 失败`, err)
+      this.logRefreshError(platform, err)
       if (!this.lastDevices.has(platform)) {
         this.lastDevices.set(platform, [])
         this.lastSnapshot.set(platform, snapshot([]))
@@ -173,6 +175,20 @@ class DeviceMonitor {
     if (!wc.isDestroyed()) {
       wc.send(DEVICES_CHANGED_CHANNEL, { platform, devices } satisfies DevicesChangedPayload)
     }
+  }
+
+  private logRefreshError(platform: WatchPlatform, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err)
+    const signature = message.split(/\r?\n/).slice(0, 2).join('\n')
+    const now = Date.now()
+    const previous = this.lastErrorLog.get(platform)
+
+    if (previous && previous.signature === signature && now - previous.at < 30000) {
+      return
+    }
+
+    this.lastErrorLog.set(platform, { signature, at: now })
+    logWarn('devices', `refresh ${platform} 失败`, err)
   }
 }
 

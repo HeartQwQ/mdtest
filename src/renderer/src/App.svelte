@@ -4,6 +4,7 @@
   import Titlebar from '$lib/components/Titlebar.svelte'
   import HomeView from '$lib/views/HomeView.svelte'
   import DeviceManagementView from '$lib/views/DeviceManagementView.svelte'
+  import SvarFileManagerView from '$lib/views/SvarFileManagerView.svelte'
   import SettingsView from '$lib/views/SettingsView.svelte'
   import { view } from '$lib/stores/view.svelte'
 </script>
@@ -19,6 +20,8 @@
         <HomeView />
       {:else if view.current === 'devices'}
         <DeviceManagementView />
+      {:else if view.current === 'svar-files'}
+        <SvarFileManagerView />
       {:else if view.current === 'settings'}
         <SettingsView />
       {/if}
