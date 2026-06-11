@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { isBundledAdbPresent, ensureAdbServer } from './adb-path'
+import { ensureAdbServer, isAdbPathResolvable } from './adb-path'
 import { createAdbTracker, type AdbTracker } from './adb-server'
 import { mergeWithCache, upsertFromLive } from './device-registry'
 import { listDevicesOrThrow } from './manager'
@@ -112,7 +112,7 @@ class DeviceMonitor {
       return
     }
 
-    if (platform === 'android' && isBundledAdbPresent()) {
+    if (platform === 'android' && isAdbPathResolvable()) {
       const tracker: AdbTracker = createAdbTracker(() => {
         void this.doRefresh('android', false)
       })
@@ -196,7 +196,7 @@ export const deviceMonitor = new DeviceMonitor()
 
 /** 应用启动时预热 adb server，避免首次 track 冷启动。 */
 export function initDeviceMonitoring(): void {
-  if (isBundledAdbPresent()) {
+  if (isAdbPathResolvable()) {
     void ensureAdbServer()
   }
 }

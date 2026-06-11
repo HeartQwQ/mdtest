@@ -24,11 +24,9 @@ import {
   deleteIosAppPath,
   mkdirIosApp
 } from './ios-fs'
+import { getDeviceStorageRootCandidates } from './device-storage-roots'
 
 export type DeviceFsPlatform = Exclude<DevicePlatform, 'windows'>
-
-const ANDROID_STORAGE_ROOTS = ['/']
-const HARMONY_STORAGE_ROOTS = ['/']
 
 const IOS_STORAGE_ROOT = '/'
 
@@ -41,7 +39,7 @@ export async function resolveDeviceStorageRoot(
     return IOS_STORAGE_ROOT
   }
 
-  const candidates = platform === 'android' ? ANDROID_STORAGE_ROOTS : HARMONY_STORAGE_ROOTS
+  const candidates = getDeviceStorageRootCandidates(platform)
   for (const p of candidates) {
     if (await remoteDirListable(platform as MobilePlatform, deviceId, p)) {
       return p.replace(/\/+$/, '') || p
@@ -61,13 +59,19 @@ export async function listDeviceDir(
   relativePath = ''
 ): Promise<{ root: string; entries: FileEntry[]; hint?: string; fromCache?: boolean }> {
   const cacheKey = makeCacheKey('device', { platform, deviceId, relativePath })
+  const root = await resolveDeviceStorageRoot(platform, deviceId)
 
   // 查缓存
   const cached = dirCache.getWithFreshness(cacheKey)
   if (cached) {
+    if ((cached.cached.root ?? '') !== root) {
+      dirCache.invalidate(cacheKey)
+      return loadAndCacheDeviceDir(cacheKey, platform, deviceId, relativePath, root)
+    }
+
     // 缓存可用，立即返回；若陈旧，在后台异步刷新
     if (cached.stale) {
-      void refreshDeviceDir(cacheKey, platform, deviceId, relativePath)
+      void refreshDeviceDir(cacheKey, platform, deviceId, relativePath, root)
     }
     return {
       root: cached.cached.root ?? '',
@@ -78,7 +82,7 @@ export async function listDeviceDir(
   }
 
   // 缓存未命中，正常加载
-  return loadAndCacheDeviceDir(cacheKey, platform, deviceId, relativePath)
+  return loadAndCacheDeviceDir(cacheKey, platform, deviceId, relativePath, root)
 }
 
 /** 从实际源加载设备目录并写入缓存 */
@@ -86,10 +90,9 @@ async function loadAndCacheDeviceDir(
   cacheKey: string,
   platform: DeviceFsPlatform,
   deviceId: string,
-  relativePath: string
+  relativePath: string,
+  root: string
 ): Promise<{ root: string; entries: FileEntry[]; hint?: string; fromCache?: boolean }> {
-  const root = await resolveDeviceStorageRoot(platform, deviceId)
-
   let entries: FileEntry[]
   let hint: string | undefined
 
@@ -125,10 +128,10 @@ async function refreshDeviceDir(
   cacheKey: string,
   platform: DeviceFsPlatform,
   deviceId: string,
-  relativePath: string
+  relativePath: string,
+  root: string
 ): Promise<void> {
   try {
-    const root = await resolveDeviceStorageRoot(platform, deviceId)
     let entries: FileEntry[]
     let hint: string | undefined
 

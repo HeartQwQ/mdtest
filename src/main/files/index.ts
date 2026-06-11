@@ -19,7 +19,8 @@ export {
   writeLocalFile,
   deleteLocalPath,
   mkdirLocal,
-  renameLocal
+  renameLocal,
+  resolveLocalPath
 } from './local-fs'
 export {
   listMobileDir,

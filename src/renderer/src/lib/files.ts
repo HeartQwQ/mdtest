@@ -7,6 +7,24 @@ export interface FileEntry {
 }
 
 export type DeviceFsPlatform = 'android' | 'harmony' | 'ios'
+export type FileFavoritePlatform = DeviceFsPlatform | 'windows'
+
+export type FileOpenSource =
+  | { type: 'local'; root: string }
+  | { type: 'device'; platform: DeviceFsPlatform; deviceId: string }
+  | { type: 'app'; platform: DeviceFsPlatform; deviceId: string; packageId: string }
+
+export interface FilePathFavorite {
+  id: string
+  platform: FileFavoritePlatform
+  sourceType: 'local' | 'device'
+  root?: string
+  path: string
+  label: string
+  addedAt: string
+}
+
+export type FilePathFavoriteInput = Omit<FilePathFavorite, 'id' | 'addedAt'>
 
 export const filesApi = {
   listLocal: (root: string, relativePath?: string) =>
@@ -99,6 +117,17 @@ export const filesApi = {
 
   saveLocalFile: (defaultName: string, content: string, binary?: boolean) =>
     window.api.filesSaveLocalFile(defaultName, content, binary) as Promise<string | null>,
+
+  open: (source: FileOpenSource, relativePath: string, name: string) =>
+    window.api.filesOpen(source, relativePath, name) as Promise<void>,
+
+  listFavorites: (platform: FileFavoritePlatform, root?: string) =>
+    window.api.filesFavoritesList(platform, root) as Promise<FilePathFavorite[]>,
+
+  addFavorite: (favorite: FilePathFavoriteInput) =>
+    window.api.filesFavoritesAdd(favorite) as Promise<FilePathFavorite>,
+
+  removeFavorite: (id: string) => window.api.filesFavoritesRemove(id) as Promise<boolean>,
 
   /** 应用包目录操作（移动三端统一入口，支持安卓/鸿蒙/iOS） */
   listApp: (platform: DeviceFsPlatform, deviceId: string, packageId: string, relativePath?: string) =>

@@ -23,6 +23,10 @@ function assertUnderRoot(root: string, target: string): string {
   return resolvedTarget
 }
 
+export function resolveLocalPath(root: string, relativePath: string): string {
+  return assertUnderRoot(root, relativePath)
+}
+
 function assertNotRoot(relativePath: string, action: string): void {
   if (!relativePath.trim() || relativePath.trim() === '.') {
     throw new Error(`不能${action}根目录`)

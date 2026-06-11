@@ -5,6 +5,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { app } from 'electron'
 import { resolveIdeviceToolchainDir } from '../devices/idevice-path'
+import { normalizeRemoteRelativePath } from './path-guards'
 import type { FileEntry } from './types'
 
 const execFileAsync = promisify(execFile)
@@ -112,7 +113,8 @@ export async function listIosDir(
   relativePath: string,
   root = '/'
 ): Promise<{ root: string; entries: FileEntry[] }> {
-  const remote = joinAfcPath(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'list', { allowRoot: true })
+  const remote = joinAfcPath(root, safeRelativePath)
   // 此版本 afcclient 不支持 `ls -l`（-l 会被当成全局选项），仅能用 plain ls
   const out = await runAfc(deviceId, ['ls', remote === '/' ? '/' : remote])
   const names = out
@@ -138,7 +140,7 @@ export async function listIosDir(
         const childRemote = joinAfcPath(remote === '/' ? '' : remote, name)
         try {
           const stat = await afcStat(deviceId, childRemote)
-          const rel = relativePath ? joinAfcPath(relativePath, name) : name
+          const rel = safeRelativePath ? joinAfcPath(safeRelativePath, name) : name
           return {
             name,
             path: rel,
@@ -172,7 +174,8 @@ export async function readIosFile(
   relativePath: string,
   root = '/'
 ): Promise<{ text: string; binary: boolean }> {
-  const remote = joinAfcPath(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'read')
+  const remote = joinAfcPath(root, safeRelativePath)
   const localTmp = tempFile('ios-read')
   try {
     await runAfc(deviceId, ['get', remote, localTmp])
@@ -191,7 +194,8 @@ export async function writeIosFile(
   binary = false,
   root = '/'
 ): Promise<void> {
-  const remote = joinAfcPath(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'write')
+  const remote = joinAfcPath(root, safeRelativePath)
   const localTmp = tempFile('ios-write')
 
   try {
@@ -217,7 +221,8 @@ export async function deleteIosPath(
   relativePath: string,
   root = '/'
 ): Promise<void> {
-  const remote = joinAfcPath(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'delete')
+  const remote = joinAfcPath(root, safeRelativePath)
   await runAfc(deviceId, ['rm', remote])
 }
 
@@ -226,7 +231,8 @@ export async function mkdirIos(
   relativePath: string,
   root = '/'
 ): Promise<void> {
-  const remote = joinAfcPath(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'mkdir')
+  const remote = joinAfcPath(root, safeRelativePath)
   await runAfc(deviceId, ['mkdir', remote])
 }
 
@@ -240,7 +246,8 @@ export async function listIosAppDir(
   relativePath = ''
 ): Promise<{ entries: FileEntry[] }> {
   // 使用 --container 模式，root 就是沙盒根目录 "/"
-  const remote = joinAfcPath('/', relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'list', { allowRoot: true })
+  const remote = joinAfcPath('/', safeRelativePath)
   const out = await runAfc(deviceId, ['ls', remote === '/' ? '/' : remote], bundleId)
   const names = out
     .split(/\r?\n/)
@@ -265,7 +272,7 @@ export async function listIosAppDir(
         try {
           const statRaw = await runAfc(deviceId, ['info', childRemote], bundleId)
           const stat = parseAfcStat(statRaw)
-          const rel = relativePath ? joinAfcPath(relativePath, name) : name
+          const rel = safeRelativePath ? joinAfcPath(safeRelativePath, name) : name
           return {
             name,
             path: rel,
@@ -299,7 +306,10 @@ export async function iosAppPathExists(
   relativePath: string
 ): Promise<boolean> {
   try {
-    const remote = joinAfcPath('/', relativePath)
+    const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'exists', {
+      allowRoot: true
+    })
+    const remote = joinAfcPath('/', safeRelativePath)
     await runAfc(deviceId, ['ls', remote], bundleId)
     return true
   } catch {
@@ -312,7 +322,8 @@ export async function readIosAppFile(
   bundleId: string,
   relativePath: string
 ): Promise<{ text: string; binary: boolean }> {
-  const remote = joinAfcPath('/', relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'read')
+  const remote = joinAfcPath('/', safeRelativePath)
   const localTmp = tempFile('ios-app-read')
   try {
     await runAfc(deviceId, ['get', remote, localTmp], bundleId)
@@ -331,7 +342,8 @@ export async function writeIosAppFile(
   content: string,
   binary = false
 ): Promise<void> {
-  const remote = joinAfcPath('/', relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'write')
+  const remote = joinAfcPath('/', safeRelativePath)
   const localTmp = tempFile('ios-app-write')
 
   try {
@@ -357,7 +369,8 @@ export async function deleteIosAppPath(
   bundleId: string,
   relativePath: string
 ): Promise<void> {
-  const remote = joinAfcPath('/', relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'delete')
+  const remote = joinAfcPath('/', safeRelativePath)
   await runAfc(deviceId, ['rm', remote], bundleId)
 }
 
@@ -366,6 +379,7 @@ export async function mkdirIosApp(
   bundleId: string,
   relativePath: string
 ): Promise<void> {
-  const remote = joinAfcPath('/', relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'mkdir')
+  const remote = joinAfcPath('/', safeRelativePath)
   await runAfc(deviceId, ['mkdir', remote], bundleId)
 }

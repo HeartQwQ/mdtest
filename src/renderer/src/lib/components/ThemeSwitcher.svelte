@@ -32,7 +32,7 @@
             'rounded-lg border px-3 py-2 text-left text-xs transition-colors',
             theme.palette === t.id
               ? 'border-primary/40 bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'border-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+              : 'border-border/50 text-muted-foreground hover:border-border hover:bg-accent hover:text-accent-foreground'
           )}
           onclick={() => setPalette(t.id as ThemePalette)}
         >

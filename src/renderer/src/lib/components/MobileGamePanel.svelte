@@ -7,7 +7,7 @@
   import { ipc, type DeviceInfo } from '../ipc'
   import { gamesApi, type InstalledPackage, type MobilePackageFavorite } from '../games'
   import { statusDotClass } from '../ui/status'
-  import FileExplorer from './FileExplorer.svelte'
+  import FileExplorer from './file-explorer/FileExplorer.svelte'
   import { reconcileSelectedDevice, watchMobileDevices } from '../devices/watch'
 
   let { platform }: { platform: 'android' | 'harmony' } = $props()
@@ -23,7 +23,6 @@
   let toolPath = $state<string | null>(null)
 
   const favSet = $derived(new Set(favorites.map((f) => f.applicationId)))
-  const mobilePlatform = $derived(platform)
 
   const meta = {
     android: { title: '安卓设备', tool: 'ADB' },
@@ -161,7 +160,7 @@
                     'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors',
                     selectedDevice?.id === d.id
                       ? 'border-primary/35 bg-accent'
-                      : 'border-transparent hover:bg-accent/60'
+                      : 'border-border/50 hover:border-border hover:bg-accent hover:text-accent-foreground'
                   )}
                   onclick={() => selectDevice(d)}
                 >
@@ -204,7 +203,7 @@
                     'w-full truncate rounded-lg border px-2.5 py-2 text-left text-xs transition-colors',
                     selectedPackage === f.applicationId
                       ? 'border-primary/35 bg-accent'
-                      : 'border-transparent text-muted-foreground hover:bg-accent/60'
+                      : 'border-border/50 text-muted-foreground hover:border-border hover:bg-accent hover:text-accent-foreground'
                   )}
                   onclick={() => (selectedPackage = f.applicationId)}
                 >
@@ -226,7 +225,7 @@
                     'min-w-0 flex-1 truncate rounded-lg border px-2 py-1.5 text-left font-mono text-[11px] transition-colors',
                     selectedPackage === pkg.applicationId
                       ? 'border-primary/35 bg-accent'
-                      : 'border-transparent text-muted-foreground hover:bg-accent/60'
+                      : 'border-border/50 text-muted-foreground hover:border-border hover:bg-accent hover:text-accent-foreground'
                   )}
                   onclick={() => (selectedPackage = pkg.applicationId)}
                 >
@@ -270,11 +269,13 @@
           <p class="mt-1 text-xs text-muted-foreground">{selectedDevice.name}</p>
           <div class="mt-4 min-h-0 flex-1">
             <FileExplorer
-              mode="mobile"
-              root=""
-              mobilePlatform={mobilePlatform}
-              deviceId={selectedDevice.id}
-              packageId={selectedPackage}
+              source={{
+                type: 'app',
+                platform,
+                deviceId: selectedDevice.id,
+                packageId: selectedPackage,
+                label: selectedPackage
+              }}
             />
           </div>
         {/if}

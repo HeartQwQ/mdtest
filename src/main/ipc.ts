@@ -1,5 +1,7 @@
-import { ipcMain, dialog, BrowserWindow, type SaveDialogOptions } from 'electron'
-import { readFileSync, writeFileSync } from 'fs'
+import { ipcMain, dialog, BrowserWindow, app, shell, type SaveDialogOptions } from 'electron'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { extname, join, resolve as resolvePath } from 'path'
+import { randomUUID } from 'crypto'
 
 import { log } from './log'
 import { isBundledAdbPresent, resolveAdbPath } from './devices/adb-path'
@@ -19,15 +21,18 @@ import { removeCachedDevice } from './devices/device-registry'
 import type { DevicePlatform } from './devices/types'
 import {
   addMobileFavorite,
+  addFilePathFavorite,
   addPcPath,
   ensurePcGamesLoaded,
   getPcSearchSettings,
   launchExe,
+  listFilePathFavorites,
   listMobileFavorites,
   listMobilePackages,
   listPcGameInstances,
   listPcPaths,
   openFolderInExplorer,
+  removeFilePathFavorite,
   removeMobileFavorite,
   removePcPath,
   removePcGameInstance,
@@ -35,6 +40,7 @@ import {
   setPcSearchSettings
 } from './games'
 import type { MobilePlatform } from './games/types'
+import type { FilePathFavoriteInput } from './games'
 import {
   deleteDevicePath,
   deleteLocalPath,
@@ -49,6 +55,7 @@ import {
   readLocalFile,
   readMobileFile,
   renameLocal,
+  resolveLocalPath,
   writeDeviceFile,
   writeLocalFile,
   writeMobileFile,
@@ -61,6 +68,66 @@ import {
   mkdirApp
 } from './files'
 import type { DeviceFsPlatform } from './files'
+import { assertAllowedRoot } from './files/path-guards'
+
+function sameResolvedPath(left: string, right: string): boolean {
+  const a = resolvePath(left)
+  const b = resolvePath(right)
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
+function allowedPcGameRoots(): string[] {
+  return listPcGameInstances().map((game) => game.path)
+}
+
+function assertAllowedPcGameRoot(root: string): void {
+  assertAllowedRoot(root, allowedPcGameRoots())
+}
+
+function assertAllowedPcExecutable(exePath: string): string {
+  const allowed = listPcGameInstances().flatMap((game) =>
+    [game.exePath, game.launcherPath].filter((path): path is string => Boolean(path))
+  )
+  const match = allowed.find((path) => sameResolvedPath(path, exePath))
+  if (!match) throw new Error('UNAUTHORIZED_PC_EXECUTABLE')
+  return match
+}
+
+type FileOpenSource =
+  | { type: 'local'; root: string }
+  | { type: 'device'; platform: DeviceFsPlatform; deviceId: string }
+  | { type: 'app'; platform: DeviceFsPlatform; deviceId: string; packageId: string }
+
+function openTempDir(): string {
+  const dir = join(app.getPath('userData'), 'file-open-temp')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function tempOpenPath(name: string): string {
+  const ext = extname(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, '') || '.tmp'
+  return join(openTempDir(), `${randomUUID()}${ext}`)
+}
+
+async function openPathWithSystem(path: string): Promise<void> {
+  const err = await shell.openPath(path)
+  if (err) throw new Error(err)
+}
+
+async function openFileWithSystem(source: FileOpenSource, relativePath: string, name: string): Promise<void> {
+  if (source.type === 'local') {
+    assertAllowedPcGameRoot(source.root)
+    return openPathWithSystem(resolveLocalPath(source.root, relativePath))
+  }
+
+  const file =
+    source.type === 'app'
+      ? await readAppFile(source.platform, source.deviceId, source.packageId, relativePath)
+      : await readDeviceFile(source.platform, source.deviceId, relativePath)
+  const localTmp = tempOpenPath(name || relativePath)
+  writeFileSync(localTmp, file.binary ? Buffer.from(file.text, 'base64') : file.text, file.binary ? undefined : 'utf8')
+  await openPathWithSystem(localTmp)
+}
 
 export function registerIpc(): void {
   initDeviceMonitoring()
@@ -187,9 +254,12 @@ export function registerIpc(): void {
     return games
   })
   ipcMain.handle('games:pc:launch', (_e, exePath: string) => {
-    launchExe(exePath)
+    launchExe(assertAllowedPcExecutable(exePath))
   })
-  ipcMain.handle('games:openFolder', (_e, path: string) => openFolderInExplorer(path))
+  ipcMain.handle('games:openFolder', (_e, path: string) => {
+    assertAllowedPcGameRoot(path)
+    return openFolderInExplorer(path)
+  })
 
   ipcMain.handle('games:pc:pickDirectory', async () => {
     const result = await dialog.showOpenDialog({
@@ -199,22 +269,28 @@ export function registerIpc(): void {
     return result.filePaths[0]
   })
 
-  ipcMain.handle('files:local:list', (_e, root: string, relativePath?: string) =>
-    listLocalDir(root, relativePath ?? '')
-  )
-  ipcMain.handle('files:local:read', (_e, root: string, relativePath: string) =>
-    readLocalFile(root, relativePath)
-  )
+  ipcMain.handle('files:local:list', (_e, root: string, relativePath?: string) => {
+    assertAllowedPcGameRoot(root)
+    return listLocalDir(root, relativePath ?? '')
+  })
+  ipcMain.handle('files:local:read', (_e, root: string, relativePath: string) => {
+    assertAllowedPcGameRoot(root)
+    return readLocalFile(root, relativePath)
+  })
   ipcMain.handle('files:local:write', (_e, root: string, relativePath: string, content: string, binary?: boolean) => {
+    assertAllowedPcGameRoot(root)
     writeLocalFile(root, relativePath, content, binary ?? false)
   })
   ipcMain.handle('files:local:delete', (_e, root: string, relativePath: string) => {
+    assertAllowedPcGameRoot(root)
     deleteLocalPath(root, relativePath)
   })
   ipcMain.handle('files:local:mkdir', (_e, root: string, relativePath: string) => {
+    assertAllowedPcGameRoot(root)
     mkdirLocal(root, relativePath)
   })
   ipcMain.handle('files:local:rename', (_e, root: string, fromRel: string, toRel: string) => {
+    assertAllowedPcGameRoot(root)
     renameLocal(root, fromRel, toRel)
   })
 
@@ -354,6 +430,18 @@ export function registerIpc(): void {
     }
   )
 
+  ipcMain.handle(
+    'files:open',
+    (_event, source: FileOpenSource, relativePath: string, name: string) =>
+      openFileWithSystem(source, relativePath, name)
+  )
+
+  ipcMain.handle('files:favorites:list', (_event, platform: DevicePlatform, root?: string) =>
+    listFilePathFavorites(platform, root)
+  )
+  ipcMain.handle('files:favorites:add', (_event, favorite: FilePathFavoriteInput) => addFilePathFavorite(favorite))
+  ipcMain.handle('files:favorites:remove', (_event, id: string) => removeFilePathFavorite(id))
+
   // ---- 目录缓存 IPC ----
 
   /** 预热：设备连接后立即异步加载根目录（不等待结果） */
@@ -364,6 +452,9 @@ export function registerIpc(): void {
       mode: 'local' | 'device',
       opts: { root?: string; platform?: string; deviceId?: string; packageId?: string }
     ) => {
+      if (mode === 'local' && opts.root) {
+        assertAllowedPcGameRoot(opts.root)
+      }
       const key = makeCacheKey(mode, { ...opts, relativePath: '' })
       if (dirCache.get(key)) return // 已有缓存，跳过
       try {
@@ -393,6 +484,9 @@ export function registerIpc(): void {
         relativePath?: string
       }
     ) => {
+      if (mode === 'local' && opts.root) {
+        assertAllowedPcGameRoot(opts.root)
+      }
       const key = makeCacheKey(mode, opts)
       dirCache.invalidate(key)
     }

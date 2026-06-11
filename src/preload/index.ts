@@ -115,6 +115,12 @@ const api = {
   filesPickLocalFile: () => ipcRenderer.invoke('files:pickLocalFile'),
   filesSaveLocalFile: (defaultName: string, content: string, binary?: boolean) =>
     ipcRenderer.invoke('files:saveLocalFile', defaultName, content, binary),
+  filesOpen: (source: object, relativePath: string, name: string) =>
+    ipcRenderer.invoke('files:open', source, relativePath, name),
+  filesFavoritesList: (platform: string, root?: string) =>
+    ipcRenderer.invoke('files:favorites:list', platform, root),
+  filesFavoritesAdd: (favorite: object) => ipcRenderer.invoke('files:favorites:add', favorite),
+  filesFavoritesRemove: (id: string) => ipcRenderer.invoke('files:favorites:remove', id),
 
   filesAppList: (platform: string, deviceId: string, packageId: string, relativePath?: string) =>
     ipcRenderer.invoke('files:app:list', platform, deviceId, packageId, relativePath),

@@ -91,7 +91,7 @@
 
             ? 'border-primary/30 bg-sidebar-accent text-sidebar-accent-foreground'
 
-            : 'border-transparent text-muted-foreground hover:border-border hover:bg-accent/50 hover:text-foreground'
+            : 'border-border/50 text-muted-foreground hover:border-border hover:bg-accent hover:text-accent-foreground'
 
         )}
 

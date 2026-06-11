@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import { delimiter, dirname, join } from 'path'
-import { execFile } from 'child_process'
+import { execFile, execFileSync } from 'child_process'
 import { promisify } from 'util'
 import { deviceToolchainDir } from './resources-path'
 import { withAdbLock } from './adb-queue'
@@ -88,19 +88,45 @@ async function findSystemAdb(): Promise<string | null> {
   }
 }
 
-export function resolveAdbPath(): string {
-  if (!existsSync(BUNDLED_ADB)) {
-    throw new Error(
-      `未找到内置 adb: ${BUNDLED_ADB}，请将 platform-tools 放入 resources/device-toolchains/android/`
-    )
+function findSystemAdbSync(): string | null {
+  try {
+    const stdout = execFileSync('where.exe', ['adb'], {
+      timeout: 5000,
+      windowsHide: true,
+      encoding: 'utf8'
+    })
+    const line = stdout
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .find(Boolean)
+    return line && existsSync(line) ? line : null
+  } catch {
+    return null
   }
-  return BUNDLED_ADB
+}
+
+export function resolveAdbPath(): string {
+  if (existsSync(BUNDLED_ADB)) return BUNDLED_ADB
+  const system = findSystemAdbSync()
+  if (system) return system
+  throw new Error(
+    `未找到 adb: 请将 platform-tools 放入 resources/device-toolchains/android/，或将 adb 加入系统 PATH。内置路径: ${BUNDLED_ADB}`
+  )
 }
 
 export function isBundledAdbPresent(): boolean {
   if (cachedReady !== undefined) return cachedReady
   cachedReady = existsSync(BUNDLED_ADB)
   return cachedReady
+}
+
+export function isAdbPathResolvable(): boolean {
+  try {
+    resolveAdbPath()
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** 输出中是否包含设备行（非 header / daemon 提示）。 */
@@ -119,13 +145,13 @@ export function adbScanConfirmedEmpty(out: string): boolean {
 
 export async function runAdb(args: string[]): Promise<string> {
   return withAdbLock(async () => {
-    const bundled = resolveAdbPath()
-    let out = await execAdbBinary(bundled, args)
+    const primary = resolveAdbPath()
+    let out = await execAdbBinary(primary, args)
 
     if (args[0] === 'devices' && !adbOutputHasDevices(out)) {
       const system = await findSystemAdb()
-      if (system && system.toLowerCase() !== bundled.toLowerCase()) {
-        logWarn('adb', '内置 adb 未列出设备，尝试系统 adb', system)
+      if (system && system.toLowerCase() !== primary.toLowerCase()) {
+        logWarn('adb', '当前 adb 未列出设备，尝试系统 adb', system)
         out = await execAdbBinary(system, args)
       }
     }
@@ -151,8 +177,8 @@ export async function isAdbAvailable(): Promise<boolean> {
 export async function ensureAdbServer(): Promise<void> {
   return withAdbLock(async () => {
     try {
-      const bundled = resolveAdbPath()
-      await execAdbBinary(bundled, ['start-server'])
+      const adb = resolveAdbPath()
+      await execAdbBinary(adb, ['start-server'])
       await new Promise((r) => setTimeout(r, 400))
     } catch {
       /* 由调用方重试 */

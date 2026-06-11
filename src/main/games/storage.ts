@@ -8,6 +8,7 @@ const FILE_NAME = 'games-store.json'
 const DEFAULT_STORE: GamesStore = {
   mobileFavorites: [],
   pcPaths: [],
+  filePathFavorites: [],
   pcSearch: {
     dirNames: ['ShadowTrackerExtra'],
     maxDepth: 5
@@ -34,6 +35,7 @@ export function loadGamesStore(): GamesStore {
     cache = {
       mobileFavorites: raw.mobileFavorites ?? [],
       pcPaths: raw.pcPaths ?? [],
+      filePathFavorites: raw.filePathFavorites ?? [],
       pcSearch: {
         dirNames: raw.pcSearch?.dirNames?.length
           ? raw.pcSearch.dirNames

@@ -27,10 +27,10 @@
         <Tooltip.Root>
           <Tooltip.Trigger
             class={cn(
-              'no-drag flex size-10 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+              'no-drag flex size-10 items-center justify-center rounded-lg border border-transparent outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring',
               isActive
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
+                ? 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                : 'text-muted-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
             )}
             aria-label={item.title}
             aria-current={isActive ? 'page' : undefined}

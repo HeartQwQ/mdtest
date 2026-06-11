@@ -35,6 +35,16 @@ export interface PcSearchSettings {
   maxDepth: number
 }
 
+export interface FilePathFavorite {
+  id: string
+  platform: 'windows' | MobilePlatform
+  sourceType: 'local' | 'device'
+  root?: string
+  path: string
+  label: string
+  addedAt: string
+}
+
 export interface PcScanResult {
   path: string
   matchedDirName: string
@@ -45,4 +55,5 @@ export interface GamesStore {
   mobileFavorites: MobilePackageFavorite[]
   pcPaths: PcGamePathEntry[]
   pcSearch: PcSearchSettings
+  filePathFavorites: FilePathFavorite[]
 }

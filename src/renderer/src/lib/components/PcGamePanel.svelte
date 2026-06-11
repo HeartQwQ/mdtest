@@ -15,7 +15,7 @@
   import { ScrollArea } from '$lib/components/ui/scroll-area'
   import { cn } from '$lib/utils'
   import { gamesApi, type PcGameInstance } from '../games'
-  import FileExplorer from './FileExplorer.svelte'
+  import FileExplorer from './file-explorer/FileExplorer.svelte'
 
   let games = $state<PcGameInstance[]>([])
   let selectedId = $state<string | null>(null)
@@ -145,7 +145,7 @@
                     'flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
                     selectedId === g.id
                       ? 'border-primary/35 bg-accent text-foreground'
-                      : 'border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      : 'border-border/50 text-muted-foreground hover:border-border hover:bg-accent hover:text-accent-foreground'
                   )}
                   onclick={() => (selectedId = g.id)}
                 >
@@ -198,7 +198,7 @@
 
           {#if showFiles}
             <div class="mt-6 min-h-0 flex-1">
-              <FileExplorer mode="local" root={selected.path} />
+              <FileExplorer source={{ type: 'local', root: selected.path, label: displayName(selected) }} />
             </div>
           {/if}
         {:else}

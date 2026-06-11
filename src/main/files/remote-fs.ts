@@ -7,6 +7,7 @@ import { runAdb } from '../devices/adb-path'
 import { runHdc } from '../devices/hdc-path'
 import type { FileEntry } from './types'
 import { resolvePackageDataRoot } from './mobile-data-path'
+import { normalizeRemoteRelativePath } from './path-guards'
 import { shellQuote } from './shell-quote'
 
 function tempDir(): string {
@@ -24,6 +25,46 @@ function joinRemote(root: string, relative: string): string {
   if (!relative || relative === '.') return base
   const rel = relative.replace(/^\/+/, '').replace(/\\/g, '/')
   return `${base}/${rel}`
+}
+
+const LS_MONTHS: Record<string, number> = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11
+}
+
+function parseLsModifiedAt(monthText?: string, dayText?: string, yearOrTime?: string): string | undefined {
+  if (!monthText || !dayText || !yearOrTime) return undefined
+
+  const month = LS_MONTHS[monthText]
+  const day = Number.parseInt(dayText, 10)
+  if (month === undefined || Number.isNaN(day)) return undefined
+
+  let year: number
+  let hour = 0
+  let minute = 0
+
+  if (yearOrTime.includes(':')) {
+    year = new Date().getFullYear()
+    const [hourText, minuteText] = yearOrTime.split(':')
+    hour = Number.parseInt(hourText, 10)
+    minute = Number.parseInt(minuteText, 10)
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return undefined
+  } else {
+    year = Number.parseInt(yearOrTime, 10)
+    if (Number.isNaN(year)) return undefined
+  }
+
+  return new Date(Date.UTC(year, month, day, hour, minute, 0)).toISOString()
 }
 
 function parseLsLine(line: string, parentRemote: string): FileEntry | null {
@@ -50,8 +91,21 @@ function parseLsLine(line: string, parentRemote: string): FileEntry | null {
     name,
     path: name,
     isDirectory,
-    size: Number.isNaN(size) ? undefined : size
+    size: Number.isNaN(size) ? undefined : size,
+    modifiedAt: parseLsModifiedAt(parts[5], parts[6], parts[7])
   }
+}
+
+export function parseLsLineForTest(
+  line: string,
+  parentRemote: string,
+  relativePath: string
+): FileEntry | null {
+  const ent = parseLsLine(line, parentRemote)
+  if (ent) {
+    ent.path = relativePath ? joinRemote(relativePath, ent.name) : ent.name
+  }
+  return ent
 }
 
 function parseLsOutput(out: string, remote: string, relativePath: string): FileEntry[] {
@@ -85,10 +139,11 @@ export async function listMobileDir(
   dataRoot?: string
 ): Promise<{ root: string; entries: FileEntry[] }> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
-  const remote = joinRemote(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'list', { allowRoot: true })
+  const remote = joinRemote(root, safeRelativePath)
   const listTarget = remote.endsWith('/') ? remote : `${remote}/`
   const out = await runShell(platform, deviceId, ['ls', '-la', shellQuote(listTarget)])
-  const entries = parseLsOutput(out, remote, relativePath)
+  const entries = parseLsOutput(out, remote, safeRelativePath)
 
   return {
     root,
@@ -107,7 +162,8 @@ export async function readMobileFile(
   dataRoot?: string
 ): Promise<{ text: string; binary: boolean }> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
-  const remote = joinRemote(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'read')
+  const remote = joinRemote(root, safeRelativePath)
   const localTmp = tempFile('read')
 
   try {
@@ -135,7 +191,8 @@ export async function writeMobileFile(
   dataRoot?: string
 ): Promise<void> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
-  const remote = joinRemote(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'write')
+  const remote = joinRemote(root, safeRelativePath)
   const localTmp = tempFile('write')
 
   try {
@@ -161,7 +218,8 @@ export async function deleteMobilePath(
   dataRoot?: string
 ): Promise<void> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
-  const remote = joinRemote(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'delete')
+  const remote = joinRemote(root, safeRelativePath)
   await runShell(platform, deviceId, ['rm', '-rf', shellQuote(remote)])
 }
 
@@ -173,6 +231,7 @@ export async function mkdirMobile(
   dataRoot?: string
 ): Promise<void> {
   const root = dataRoot ?? (await resolvePackageDataRoot(platform, deviceId, packageId))
-  const remote = joinRemote(root, relativePath)
+  const safeRelativePath = normalizeRemoteRelativePath(relativePath, 'mkdir')
+  const remote = joinRemote(root, safeRelativePath)
   await runShell(platform, deviceId, ['mkdir', '-p', shellQuote(remote)])
 }

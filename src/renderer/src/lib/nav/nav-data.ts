@@ -2,7 +2,6 @@ import type { Component } from 'svelte'
 import {
   AudioWaveform,
   Command,
-  FolderOpen,
   GalleryVerticalEnd,
   House,
   MonitorSmartphone,
@@ -32,7 +31,6 @@ export interface UserInfo {
 export const navMain: NavItem[] = [
   { id: 'home', title: '主页', desc: '功能总览与快速入口', icon: House },
   { id: 'devices', title: '设备管理', desc: '四端设备接入与投屏控制', icon: MonitorSmartphone },
-  { id: 'svar-files', title: 'SVAR 文件管理', desc: '原生文件管理实验页', icon: FolderOpen },
   { id: 'settings', title: '设置', desc: '应用内各项配置', icon: Settings }
 ]
 

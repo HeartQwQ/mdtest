@@ -5,7 +5,7 @@
   import { cn } from '$lib/utils'
   import { ipc, type DeviceInfo } from '../ipc'
   import { statusDotClass } from '../ui/status'
-  import FileExplorer from './FileExplorer.svelte'
+  import FileExplorer from './file-explorer/FileExplorer.svelte'
   import { reconcileSelectedDevice, watchMobileDevices } from '../devices/watch'
 
   let devices = $state<DeviceInfo[]>([])
@@ -124,7 +124,7 @@
                     'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors',
                     selected?.id === d.id
                       ? 'border-primary/35 bg-accent'
-                      : 'border-transparent hover:bg-accent/60'
+                      : 'border-border/50 hover:border-border hover:bg-accent hover:text-accent-foreground'
                   )}
                   onclick={() => selectDevice(d)}
                 >
@@ -157,7 +157,7 @@
               <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 设备存储
               </h3>
-              <FileExplorer mode="device" root="" devicePlatform="ios" deviceId={selected.id} />
+              <FileExplorer source={{ type: 'device', platform: 'ios', deviceId: selected.id, label: selected.name }} />
             </div>
           {/if}
 
