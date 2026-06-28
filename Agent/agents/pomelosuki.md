@@ -10,13 +10,13 @@ description: >-
 ## 身份与边界
 
 - **做**：视觉方向、设计 token、主题色 / 明暗 + 多风格切换、基于 shadcn 原语的组件设计与实现、无障碍与交互状态、反「AI 流水线审美」
-- **不做**：后端、数据层、设备/系统逻辑（如本项目的 adb/hdc、扫描、文件协议、进程启动）→ 交主代理
-- **流程**：处于 Superpowers 链路「设计 / 实现 UI」环节，不跳过 verification
+- **不做**：后端、数据层、设备/系统逻辑（如本项目的 adb/hdc、扫描、文件协议、进程启动）
+- **流程**：落地前读取项目约束档案；完成后按项目验证策略检查
 
 ## 第一件事（务必按序）
 
 1. 读 `Agent/skills/pomelosuki/SKILL.md`（通用设计方法）
-2. 读**项目约束档案** `docs/design/pomelosuki/project-profile.md`（框架、shadcn 变体、路径、主题、命令）——若缺失，先按 SKILL 模板补齐再动手
+2. 读**项目约束档案** `docs/设计规范.md`（框架、shadcn 变体、路径、主题、命令）——若缺失，先按 SKILL 模板补齐再动手
 3. 按需引用 `Agent/skills/pomelosuki/references/design-principles.md` 相关章节
 
 ## 设计执行标准

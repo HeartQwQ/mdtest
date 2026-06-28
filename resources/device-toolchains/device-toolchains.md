@@ -1,6 +1,6 @@
-﻿# 内置设备工具链
+# 内置设备工具链
 
-> 本文档说明 `resources/device-toolchains/` 中的运行时二进制。`resources/` 目录只保留应用运行需要的资源，不再放项目说明类文档。
+> 本文档说明 `resources/device-toolchains/` 中的运行时二进制，并随工具链目录一起维护。
 
 三端 CLI 统一放在 `device-toolchains/`，随仓库提交，克隆即可使用，无需额外下载脚本。
 
@@ -11,10 +11,11 @@ resources/
     │   └── adb.exe
     ├── harmony/          # DevEco hdc toolchains
     │   └── hdc.exe
-    └── ios/              # libimobiledevice Windows 套件
-        ├── idevice_id.exe
-        ├── ideviceinfo.exe
-        └── …
+    ├── ios/              # libimobiledevice Windows 套件
+    │   ├── idevice_id.exe
+    │   ├── ideviceinfo.exe
+    │   └── …
+    └── device-toolchains.md
 ```
 
 ## 路径约定
@@ -58,4 +59,3 @@ iOS 设备接入另需本机安装 **Apple Mobile Device Support**（iTunes 组�
 ## 更新工具链
 
 直接替换对应子目录内的文件并提交即可。鸿蒙工具链可从 DevEco 安装目录复制 `toolchains/` 内容到 `harmony/`。
-

@@ -3,7 +3,7 @@ name: pomelosuki
 description: >-
   柚爱（PomeloSuki）— 专注 shadcn/ui + Tailwind 的 UI/UX 设计专家。负责视觉方向、设计 token、
   主题色与风格切换、组件设计，并能按项目框架（React / Vue / Svelte 等）从设计落地到前端。
-  落地前必读项目约束档案；不替代 Superpowers 开发流程，不碰后端/设备逻辑。
+  落地前必读项目约束档案；不碰后端/设备逻辑。
 ---
 
 # PomeloSuki（柚爱）— shadcn/ui + Tailwind UI 设计专家
@@ -20,7 +20,7 @@ description: >-
 
 ## 何时不用
 
-- 纯后端、数据层、设备/系统逻辑（交主代理 + Superpowers）
+- 纯后端、数据层、设备/系统逻辑
 - 已有 Figma 终稿且仅像素还原（可用 Figma MCP，本 skill 只做验收清单）
 
 ## 核心理念（shadcn + Tailwind）
@@ -90,11 +90,11 @@ Purpose（谁用、解决什么）→ Tone（一种明确基调）→ Constraint
 
 **动手写任何代码前，先读取当前项目的约束档案**，按其框架/路径/主题/命令执行：
 
-1. 默认查找：`docs/design/pomelosuki/project-profile.md`
+1. 默认查找：`docs/设计规范.md`
 2. 若不存在：依据通用模板询问/补齐（框架与 shadcn 变体、Tailwind 版本、图标库、组件目录、token 与已有主题、构建与校验命令、设计基调、边界）。
 3. 用项目档案里的命令做 **verification**（如类型检查 + 构建）。
 
-> 本仓库 mdtest 的档案见 `docs/design/pomelosuki/project-profile.md`（Svelte 5 + shadcn-svelte + Tailwind 4）。
+> 本仓库 mdtest 的档案见 `docs/设计规范.md`（Svelte 5 + shadcn-svelte + Tailwind 4）。
 
 ## 子代理
 

@@ -588,7 +588,7 @@ ease-out-quint: cubic-bezier(0.755, 0.05, 0.855, 0.06)
 
 ### Desktop Design
 
-**桌面应用通则**（具体数值见项目约束档案 `docs/design/pomelosuki/project-profile.md`）：
+**桌面应用通则**（具体数值见项目约束档案 `docs/设计规范.md`）：
 - 固定侧栏 + 弹性主区（`min-w-0 flex-1`）；设定合理最小窗口尺寸
 - 颜色走语义 token（`bg-background` / `bg-card` / `text-foreground`…），勿硬编码色阶
 - 图标用矢量图标库，**禁止 emoji 作图标**

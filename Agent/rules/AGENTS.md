@@ -2,7 +2,7 @@
 
 ## 沟通
 
-- 必须使用中文沟通，专业术语可翻译对照显示，例如 Skill（技能）、MCP（模型上下文协议）。
+- 必须使用中文沟通，专业术语需要对照翻译。
 
 ## 项目定位
 
@@ -14,10 +14,10 @@
 
 开工前按任务读取：
 
-1. 产品目标和阶段范围：`docs/product/requirements.md`。
-2. UI / 设计任务：`Agent/skills/pomelosuki/SKILL.md`、`docs/design/project-design.md`、`docs/design/pomelosuki/project-profile.md`、`docs/design/pomelosuki/ui-v2-design-notes.md`。
-3. MCP 配置和来源策略：`Agent/mcp/registry.md`、`Agent/mcp/mcp.json`。
-4. 设备工具链来源、许可和路径：`docs/resources/device-toolchains.md`。
+1. 产品目标和阶段范围：`docs/需求文档.md`。
+2. UI / 设计任务：`Agent/skills/pomelosuki/SKILL.md`、`docs/设计规范.md`。
+3. MCP 配置：`Agent/mcp/mcp.json`。
+4. 设备工具链来源、许可和路径：`resources/device-toolchains/device-toolchains.md`。
 5. 当前代码搜索结果和本轮用户消息。
 
 不确定 API、框架能力、依赖行为或最新文档时，必须查官方文档、MCP 或当前代码，不能凭记忆猜。
@@ -29,34 +29,22 @@
 - 引入或拒绝开源方案前，至少说明候选方案、许可证、维护状态、Electron + Svelte + Android-first 集成成本，以及采用或拒绝原因。
 - 简单实现只能作为临时验证路径，不能冒充长期架构。
 
-## Agent 分工
+## 项目内 Agent
+
+当前项目内只维护一个角色化 Agent：`Agent/agents/pomelosuki.md`。
 
 | 角色 | 负责 | 不负责 |
 |------|------|--------|
-| 主代理 | 需求澄清、IPC / 主进程、设备与游戏逻辑、计划与验证、协调子代理 | 独自大改 UI 而不读设计事实源 |
-| Superpowers | brainstorming、writing-plans、TDD、debug、verification 等流程 | UI 审美细则 |
 | 柚爱 pomelosuki | shadcn-svelte + Tailwind UI/UX、设计 token、主题色、组件状态、界面评审 | adb / hdc、扫描、文件协议、主进程逻辑 |
 
 涉及 UI 时，先读 `Agent/skills/pomelosuki/SKILL.md`；复杂改版可参考 `Agent/agents/pomelosuki.md` 的职责边界。
 
-## Superpowers 流程
-
-- 新功能、改行为、架构或 UX 决策前，使用 brainstorming 澄清意图、约束和方案。
-- 多步骤或跨文件任务，使用 writing-plans；项目计划写入 `docs/product/plans/`。
-- 功能和 bugfix 默认遵循 test-driven-development；无法先写自动化测试时，必须说明原因并给出可执行验证命令。
-- 任何 bug、测试失败或异常行为，先用 systematic-debugging 找根因，再修复。
-- 声称完成前必须使用 verification-before-completion，基于新鲜命令输出说明结果。
-- 较大功能完成后做自检或 code review，再进入收尾。
-
-用户明确要求“直接改”时，可缩小计划形式，但不能跳过事实源和完成前验证。
-
 ## MCP 与文档查询
 
-- OpenAI / Codex / Agents / Vision / Responses 相关问题，优先使用 OpenAI developer docs MCP。
+MCP 配置见 `Agent/mcp/mcp.json`，使用策略以本节为准。
+
 - Svelte 5、SvelteKit、runes 或组件写法不确定时，优先使用 Svelte MCP。
 - 第三方库 API、安装方式和版本行为不确定时，优先使用 Context7 或官方文档。
-- UI 大改、交互验收、视觉回归时，优先使用 Playwright / Browser 能力做目视验证。
-- 不启用广权限 filesystem MCP、数据库写入 MCP、公司私域数据 MCP，除非单独评估并得到确认。
 
 ## 技术边界
 
@@ -74,12 +62,13 @@
 
 ## 文件创建与目录治理
 
-- AI 规则、Skill、MCP、智能体、记忆进入 `Agent/`。
-- 产品需求、阶段计划、流程图、PPT、PDF、Excel、调研资料进入 `docs/`。
-- 运行时工具链和二进制资源进入 `resources/`，说明文档进入 `docs/resources/`。
+- AI 规则、Skill、MCP 配置、智能体进入 `Agent/`。
+- 产品事实源、设计规范、流程图、PPT、PDF、Excel、调研资料进入 `docs/`。
+- 临时执行计划默认不写入 `docs/`，除非用户明确要求保留为长期文档。
+- 运行时工具链、二进制资源和随资源维护的说明文档进入 `resources/`。
 - 源码进入 `src/`，维护脚本进入 `scripts/`。
 - 临时文件必须放入根目录 `tmp/`、`scripts/tmp/` 或对应模块的 `tmp/` 子目录，不能散落在根目录或功能目录下。
-- 新增文档后要从根 `README.md`、`Agent/README.md` 或 `docs/README.md` 中至少一个入口可导航到。
+- 新增长期文档后要从根 `README.md` 中可导航到；避免在子目录重复维护入口说明。
 
 ## 验证策略
 
